@@ -8,7 +8,7 @@ const cors = require('cors');
 const fs = require('fs');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 const JWT_SECRET = process.env.JWT_SECRET || 'tara-ai-jwt-secret-2026-secure-change-in-production';
 
 const pool = new pg.Pool({
