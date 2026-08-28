@@ -21,15 +21,15 @@ const pool = new pg.Pool({
 app.use(cors({ origin: ['https://ai.giantara.web.id', 'http://localhost:5173'] }));
 app.use(express.json({ limit: '10mb' }));
 
-const distPath = path.join(__dirname, 'client', 'dist');
-const uploadsPath = path.join(__dirname, 'uploads');
+const distPath = path.join('/home/giantar1/ai', 'client', 'dist');
+const uploadsPath = path.join('/home/giantar1/ai', 'uploads');
 if (!fs.existsSync(uploadsPath)) fs.mkdirSync(uploadsPath, { recursive: true });
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
 }
 
 const upload = multer({
-  dest: path.join(__dirname, 'uploads'),
+  dest: path.join('/home/giantar1/ai', 'uploads'),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = ['.pdf', '.docx', '.doc', '.txt', '.md', '.csv', '.html'];
