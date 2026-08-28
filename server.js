@@ -26,12 +26,11 @@ const uploadsPath = path.join('/home/giantar1/ai', 'uploads');
 if (!fs.existsSync(uploadsPath)) fs.mkdirSync(uploadsPath, { recursive: true });
 const distExists = fs.existsSync(distPath);
 if (distExists) {
-  app.use(express.static(distPath));
+  app.use(express.static(path.join(distPath), { index: 'index.html' }));
 }
 
-// Debug route
 app.get('/api/debug', (req, res) => {
-  res.json({ distPath, distExists, __dirname: __dirname, files: fs.existsSync(distPath) ? fs.readdirSync(distPath) : [] });
+  res.json({ distExists, files: fs.existsSync(distPath) ? fs.readdirSync(distPath) : [], distPath });
 });
 
 const upload = multer({
@@ -299,6 +298,9 @@ app.get('/api/health', (req, res) => {
 // ============ SPA FALLBACK ============
 
 if (fs.existsSync(distPath)) {
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api/')) {
       return res.status(404).json({ error: 'Not found' });
