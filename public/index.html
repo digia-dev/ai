@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tara AI</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#000000">
+  <meta name="description" content="AI-Powered Assistant by Giantara">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f5f5f5;
+      --bg-tertiary: #eaeaea;
+      --text: #000000;
+      --text-secondary: #666666;
+      --text-muted: #999999;
+      --border: #e0e0e0;
+      --accent: #000000;
+      --accent-hover: #333333;
+      --success: #16a34a;
+      --error: #dc2626;
+      --warning: #f59e0b;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08);
+      --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* Auth Page */
+    .auth-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 400px;
+      padding: 40px;
+    }
+
+    .auth-card h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .auth-card p {
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text-secondary);
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn:hover { background: var(--accent-hover); }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-secondary);
+    }
+
+    .auth-switch {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .auth-switch a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .error-msg {
+      background: #fef2f2;
+      color: var(--error);
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    /* Chat Layout */
+    .chat-layout {
+      display: flex;
+      height: 100vh;
+    }
+
+    .sidebar {
+      width: 280px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sidebar-header h2 {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .sidebar-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: background 0.2s;
+    }
+
+    .icon-btn:hover { background: var(--bg-tertiary); }
+
+    .conv-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .conv-item {
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 13px;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.2s;
+    }
+
+    .conv-item:hover { background: var(--bg-tertiary); }
+    .conv-item.active { background: var(--bg-tertiary); font-weight: 600; }
+
+    .conv-item .title {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .conv-item .delete-btn {
+      opacity: 0;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--text-muted);
+      padding: 2px 4px;
+    }
+
+    .conv-item:hover .delete-btn { opacity: 1; }
+
+    .sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+
+    .sidebar-footer a, .sidebar-footer button {
+      flex: 1;
+      padding: 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    /* Main Chat Area */
+    .chat-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .chat-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mobile-menu {
+      display: none;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .message {
+      max-width: 720px;
+      margin: 0 auto 16px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .message-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .message-avatar.user {
+      background: var(--bg-tertiary);
+      color: var(--text);
+    }
+
+    .message-content {
+      flex: 1;
+      font-size: 14px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+
+    .welcome {
+      text-align: center;
+      padding: 80px 20px;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    .welcome h2 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .welcome p {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .suggestions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 24px;
+    }
+
+    .suggestion {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+      background: var(--bg);
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+
+    .suggestion:hover { background: var(--bg-secondary); }
+
+    /* Input Area */
+    .chat-input-area {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .chat-input-wrapper {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .chat-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      min-height: 44px;
+      max-height: 200px;
+      line-height: 1.5;
+    }
+
+    .chat-input:focus { border-color: var(--accent); }
+
+    .send-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: white;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .send-btn:hover { background: var(--accent-hover); }
+    .send-btn:disabled { background: var(--bg-tertiary); cursor: not-allowed; }
+
+    /* Sources Page */
+    .sources-page {
+      padding: 24px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .sources-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .sources-header h2 { font-size: 20px; }
+
+    .upload-area {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 40px;
+      text-align: center;
+      margin-bottom: 24px;
+      transition: border-color 0.2s;
+      cursor: pointer;
+    }
+
+    .upload-area:hover, .upload-area.dragover {
+      border-color: var(--accent);
+    }
+
+    .upload-area p { color: var(--text-secondary); font-size: 14px; }
+    .upload-area .icon { font-size: 32px; margin-bottom: 8px; }
+
+    .source-list { list-style: none; }
+
+    .source-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+    }
+
+    .source-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .source-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .source-name { font-size: 14px; font-weight: 500; }
+    .source-meta { font-size: 12px; color: var(--text-muted); }
+
+    .source-actions { display: flex; gap: 8px; }
+
+    .text-source-area {
+      margin-bottom: 24px;
+    }
+
+    .text-source-area textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 100px;
+      outline: none;
+    }
+
+    .text-source-area textarea:focus { border-color: var(--accent); }
+
+    .text-source-inputs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .text-source-inputs input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      font-family: inherit;
+      transition: color 0.2s;
+    }
+
+    .tab.active {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
+
+    /* Loading */
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 8px 0;
+    }
+
+    .typing-indicator span {
+      width: 6px;
+      height: 6px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      animation: blink 1.4s infinite both;
+    }
+
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes blink {
+      0%, 80%, 100% { opacity: 0.3; }
+      40% { opacity: 1; }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed;
+        left: -280px;
+        top: 0;
+        bottom: 0;
+        z-index: 100;
+        transition: left 0.3s;
+      }
+      .sidebar.open { left: 0; }
+      .mobile-menu { display: flex; align-items: center; justify-content: center; }
+      .suggestions { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- AUTH PAGE -->
+  <div id="auth-page" class="auth-container" style="display:none">
+    <div class="auth-card">
+      <h1 id="auth-title">Tara AI</h1>
+      <p id="auth-subtitle">Your AI-powered assistant by Giantara</p>
+      <div class="error-msg" id="auth-error"></div>
+      <form id="auth-form">
+        <div class="form-group" id="name-group" style="display:none">
+          <label>Name</label>
+          <input type="text" id="name-input" placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="email-input" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="password-input" placeholder="Min 6 characters" required>
+        </div>
+        <button type="submit" class="btn" id="auth-btn">Login</button>
+      </form>
+      <div class="auth-switch">
+        <span id="auth-switch-text">Don't have an account?</span>
+        <a id="auth-switch-link" onclick="toggleAuth()">Register</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHAT PAGE -->
+  <div id="chat-page" class="chat-layout" style="display:none">
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h2>Tara AI</h2>
+        <div class="sidebar-actions">
+          <button class="icon-btn" onclick="newChat()" title="New Chat">+</button>
+        </div>
+      </div>
+      <div class="conv-list" id="conv-list"></div>
+      <div class="sidebar-footer">
+        <a href="#" onclick="showSources(event)">Sources</a>
+        <button onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="chat-main">
+      <div class="chat-header">
+        <button class="mobile-menu" onclick="toggleSidebar()">☰</button>
+        <span id="chat-title">New Chat</span>
+      </div>
+      <div class="messages" id="messages">
+        <div class="welcome" id="welcome">
+          <div style="font-size:40px;margin-bottom:16px">✦</div>
+          <h2>Hi, I'm Tara</h2>
+          <p>AI assistant for the Giantara ecosystem. Ask me anything, or upload sources for analysis.</p>
+          <div class="suggestions">
+            <button class="suggestion" onclick="sendSuggestion('Help me analyze my uploaded documents')">Analyze documents</button>
+            <button class="suggestion" onclick="sendSuggestion('What can you do?')">What can you do?</button>
+            <button class="suggestion" onclick="sendSuggestion('#input saya akan meeting dengan TIM 28 agustus jam 2 siang')">Set a reminder</button>
+            <button class="suggestion" onclick="sendSuggestion('Tell me about the Giantara ecosystem')">About Giantara</button>
+          </div>
+        </div>
+      </div>
+      <div class="chat-input-area">
+        <div class="chat-input-wrapper">
+          <textarea class="chat-input" id="chat-input" placeholder="Ask Tara anything..." rows="1"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+          <button class="send-btn" id="send-btn" onclick="sendMessage()">↑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOURCES PAGE -->
+  <div id="sources-page" style="display:none">
+    <div class="sources-page">
+      <div class="sources-header">
+        <h2>Sources</h2>
+        <button class="btn-secondary btn" style="width:auto" onclick="showChat()">← Back to Chat</button>
+      </div>
+
+      <div class="tab-bar">
+        <button class="tab active" onclick="switchTab('file', this)">File Upload</button>
+        <button class="tab" onclick="switchTab('text', this)">Text Source</button>
+      </div>
+
+      <div id="tab-file">
+        <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+          <div class="icon">📎</div>
+          <p>Click or drag files here to upload</p>
+          <p style="font-size:12px;margin-top:4px;color:var(--text-muted)">PDF, DOCX, TXT, MD, CSV, HTML — Max 10MB</p>
+        </div>
+        <input type="file" id="file-input" style="display:none" accept=".pdf,.docx,.doc,.txt,.md,.csv,.html" multiple onchange="uploadFiles(this.files)">
+      </div>
+
+      <div id="tab-text" style="display:none">
+        <div class="text-source-area">
+          <div class="text-source-inputs">
+            <input type="text" id="text-source-name" placeholder="Source name (e.g. Meeting Notes)">
+          </div>
+          <textarea id="text-source-content" placeholder="Paste or type your text content here..."></textarea>
+          <button class="btn" style="width:auto;margin-top:8px" onclick="addTextSource()">Add Source</button>
+        </div>
+      </div>
+
+      <ul class="source-list" id="source-list"></ul>
+    </div>
+  </div>
+
+  <script>
+    let token = localStorage.getItem('tara_token');
+    let currentUser = null;
+    let conversations = [];
+    let currentConvId = null;
+    let isRegistering = false;
+
+    // ============ AUTH ============
+
+    function toggleAuth() {
+      isRegistering = !isRegistering;
+      document.getElementById('auth-title').textContent = isRegistering ? 'Create Account' : 'Tara AI';
+      document.getElementById('auth-subtitle').textContent = isRegistering ? 'Join Giantara ecosystem' : 'Your AI-powered assistant by Giantara';
+      document.getElementById('auth-btn').textContent = isRegistering ? 'Register' : 'Login';
+      document.getElementById('name-group').style.display = isRegistering ? 'block' : 'none';
+      document.getElementById('auth-switch-text').textContent = isRegistering ? 'Already have an account?' : "Don't have an account?";
+      document.getElementById('auth-switch-link').textContent = isRegistering ? 'Login' : 'Register';
+      document.getElementById('auth-error').style.display = 'none';
+    }
+
+    document.getElementById('auth-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email-input').value;
+      const password = document.getElementById('password-input').value;
+      const name = document.getElementById('name-input').value;
+      const errEl = document.getElementById('auth-error');
+
+      try {
+        const endpoint = isRegistering ? '/api/auth/register' : '/api/auth/login';
+        const body = isRegistering ? { email, password, name } : { email, password };
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        token = data.token;
+        currentUser = data.user;
+        localStorage.setItem('tara_token', token);
+        showChatPage();
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+      }
+    };
+
+    function logout() {
+      token = null;
+      currentUser = null;
+      localStorage.removeItem('tara_token');
+      document.getElementById('chat-page').style.display = 'none';
+      document.getElementById('sources-page').style.display = 'none';
+      document.getElementById('auth-page').style.display = 'flex';
+    }
+
+    // ============ PAGES ============
+
+    function showChatPage() {
+      document.getElementById('auth-page').style.display = 'none';
+      document.getElementById('sources-page').style.display = 'none';
+      document.getElementById('chat-page').style.display = 'flex';
+      loadConversations();
+    }
+
+    function showSources(e) {
+      if (e) e.preventDefault();
+      document.getElementById('chat-page').style.display = 'none';
+      document.getElementById('sources-page').style.display = 'block';
+      loadSources();
+    }
+
+    function showChat() {
+      document.getElementById('sources-page').style.display = 'none';
+      document.getElementById('chat-page').style.display = 'flex';
+    }
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    // ============ CONVERSATIONS ============
+
+    async function loadConversations() {
+      try {
+        const res = await apiFetch('/api/conversations');
+        conversations = await res.json();
+        renderConversations();
+      } catch {}
+    }
+
+    function renderConversations() {
+      const list = document.getElementById('conv-list');
+      list.innerHTML = conversations.map(c => `
+        <div class="conv-item ${c.id === currentConvId ? 'active' : ''}" onclick="openConversation(${c.id}, '${(c.title||'').replace(/'/g,"\\'")}')">
+          <span class="title">${c.title || 'New Chat'}</span>
+          <button class="delete-btn" onclick="event.stopPropagation();deleteConversation(${c.id})">×</button>
+        </div>
+      `).join('');
+    }
+
+    async function newChat() {
+      currentConvId = null;
+      document.getElementById('chat-title').textContent = 'New Chat';
+      document.getElementById('messages').innerHTML = '';
+      renderWelcome();
+      renderConversations();
+      document.getElementById('sidebar').classList.remove('open');
+    }
+
+    async function openConversation(id, title) {
+      currentConvId = id;
+      document.getElementById('chat-title').textContent = title || 'Chat';
+      document.getElementById('sidebar').classList.remove('open');
+      renderConversations();
+      await loadMessages(id);
+    }
+
+    async function deleteConversation(id) {
+      if (!confirm('Delete this conversation?')) return;
+      await apiFetch(`/api/conversations/${id}`, { method: 'DELETE' });
+      if (currentConvId === id) newChat();
+      loadConversations();
+    }
+
+    // ============ MESSAGES ============
+
+    function renderWelcome() {
+      document.getElementById('messages').innerHTML = `
+        <div class="welcome" id="welcome">
+          <div style="font-size:40px;margin-bottom:16px">✦</div>
+          <h2>Hi, I'm Tara</h2>
+          <p>AI assistant for the Giantara ecosystem. Ask me anything, or upload sources for analysis.</p>
+          <div class="suggestions">
+            <button class="suggestion" onclick="sendSuggestion('Help me analyze my uploaded documents')">Analyze documents</button>
+            <button class="suggestion" onclick="sendSuggestion('What can you do?')">What can you do?</button>
+            <button class="suggestion" onclick="sendSuggestion('#input saya akan meeting dengan TIM 28 agustus jam 2 siang')">Set a reminder</button>
+            <button class="suggestion" onclick="sendSuggestion('Tell me about the Giantara ecosystem')">About Giantara</button>
+          </div>
+        </div>`;
+    }
+
+    async function loadMessages(convId) {
+      const res = await apiFetch(`/api/conversations/${convId}/messages`);
+      const msgs = await res.json();
+      const el = document.getElementById('messages');
+      el.innerHTML = msgs.map(m => messageHTML(m.role, m.content)).join('');
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function messageHTML(role, content) {
+      const avatar = role === 'user' ? '<div class="message-avatar user">U</div>' : '<div class="message-avatar">T</div>';
+      return `<div class="message">${avatar}<div class="message-content">${escapeHtml(content)}</div></div>`;
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    }
+
+    function sendSuggestion(text) {
+      document.getElementById('chat-input').value = text;
+      sendMessage();
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('chat-input');
+      const message = input.value.trim();
+      if (!message) return;
+
+      input.value = '';
+      const el = document.getElementById('messages');
+      const welcome = document.getElementById('welcome');
+      if (welcome) welcome.remove();
+
+      el.innerHTML += messageHTML('user', message);
+      el.innerHTML += `<div class="message" id="typing"><div class="message-avatar">T</div><div class="typing-indicator"><span></span><span></span><span></span></div></div>`;
+      el.scrollTop = el.scrollHeight;
+
+      document.getElementById('send-btn').disabled = true;
+
+      try {
+        const res = await apiFetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversationId: currentConvId, message }),
+        });
+        const data = await res.json();
+        document.getElementById('typing')?.remove();
+
+        if (!res.ok) throw new Error(data.error);
+
+        currentConvId = data.conversationId;
+        document.getElementById('chat-title').textContent = message.slice(0, 50);
+        el.innerHTML += messageHTML('assistant', data.content);
+        el.scrollTop = el.scrollHeight;
+        loadConversations();
+      } catch (err) {
+        document.getElementById('typing')?.remove();
+        el.innerHTML += `<div class="message"><div class="message-avatar">T</div><div class="message-content" style="color:var(--error)">Error: ${escapeHtml(err.message)}</div></div>`;
+      }
+
+      document.getElementById('send-btn').disabled = false;
+    }
+
+    // ============ SOURCES ============
+
+    function switchTab(tab, btn) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-file').style.display = tab === 'file' ? 'block' : 'none';
+      document.getElementById('tab-text').style.display = tab === 'text' ? 'block' : 'none';
+    }
+
+    async function loadSources() {
+      try {
+        const res = await apiFetch('/api/sources');
+        const sources = await res.json();
+        document.getElementById('source-list').innerHTML = sources.map(s => `
+          <li class="source-item">
+            <div class="source-info">
+              <div class="source-icon">📄</div>
+              <div>
+                <div class="source-name">${escapeHtml(s.name)}</div>
+                <div class="source-meta">${s.format || 'text'} · ${s.wordCount} words</div>
+              </div>
+            </div>
+            <div class="source-actions">
+              <button class="icon-btn" onclick="deleteSource(${s.id})" title="Delete">×</button>
+            </div>
+          </li>
+        `).join('') || '<li style="text-align:center;color:var(--text-muted);padding:40px">No sources yet. Upload a file or add text.</li>';
+      } catch {}
+    }
+
+    async function uploadFiles(files) {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        await apiFetch('/api/sources', { method: 'POST', body: formData });
+      }
+      loadSources();
+    }
+
+    async function addTextSource() {
+      const name = document.getElementById('text-source-name').value.trim();
+      const content = document.getElementById('text-source-content').value.trim();
+      if (!name || !content) return alert('Name and content required');
+      await apiFetch('/api/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, content }),
+      });
+      document.getElementById('text-source-name').value = '';
+      document.getElementById('text-source-content').value = '';
+      loadSources();
+    }
+
+    async function deleteSource(id) {
+      if (!confirm('Delete this source?')) return;
+      await apiFetch(`/api/sources/${id}`, { method: 'DELETE' });
+      loadSources();
+    }
+
+    // Drag & drop
+    const uploadArea = document.getElementById('upload-area');
+    uploadArea?.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+    uploadArea?.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+    uploadArea?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      uploadFiles(e.dataTransfer.files);
+    });
+
+    // ============ HELPERS ============
+
+    async function apiFetch(url, opts = {}) {
+      const headers = { ...opts.headers, 'Authorization': `Bearer ${token}` };
+      if (opts.body && !(opts.body instanceof FormData)) {
+        headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+      }
+      const res = await fetch(url, { ...opts, headers });
+      if (res.status === 401) logout();
+      return res;
+    }
+
+    // ============ INIT ============
+
+    (async function init() {
+      if (token) {
+        try {
+          const res = await apiFetch('/api/auth/me');
+          if (res.ok) {
+            currentUser = await res.json();
+            showChatPage();
+            return;
+          }
+        } catch {}
+        logout();
+      }
+      document.getElementById('auth-page').style.display = 'flex';
+    })();
+  </script>
+</body>
+</html>
