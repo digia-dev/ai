@@ -22,20 +22,11 @@ const pool = new pg.Pool({
 app.use(cors({ origin: ['https://ai.giantara.web.id', 'http://localhost:5173'] }));
 app.use(express.json({ limit: '10mb' }));
 
-const distPath = path.join('/home/giantar1/ai', 'client', 'dist');
-const uploadsPath = path.join('/home/giantar1/ai', 'uploads');
+const uploadsPath = path.join('/home/giantar1/api', 'uploads');
 if (!fs.existsSync(uploadsPath)) fs.mkdirSync(uploadsPath, { recursive: true });
-const distExists = fs.existsSync(distPath);
-if (distExists) {
-  app.use(express.static(path.join(distPath), { index: 'index.html' }));
-}
-
-app.get('/api/debug', (req, res) => {
-  res.json({ distExists, files: fs.existsSync(distPath) ? fs.readdirSync(distPath) : [], distPath });
-});
 
 const upload = multer({
-  dest: path.join('/home/giantar1/ai', 'uploads'),
+  dest: uploadsPath,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = ['.pdf', '.docx', '.doc', '.txt', '.md', '.csv', '.html'];
@@ -55,7 +46,18 @@ function auth(req, res, next) {
   }
 }
 
-// ============ AUTH ============
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/debug-env', (req, res) => {
+  res.json({
+    hasApiKey: !!process.env.OPENROUTER_API_KEY,
+    apiKeyPrefix: process.env.OPENROUTER_API_KEY ? process.env.OPENROUTER_API_KEY.substring(0, 12) + '...' : 'none',
+    hasJwtSecret: !!process.env.JWT_SECRET,
+    hasDbHost: !!process.env.DB_HOST
+  });
+});
 
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -96,8 +98,6 @@ app.get('/api/auth/me', auth, async (req, res) => {
   }
 });
 
-// ============ CONVERSATIONS ============
-
 app.get('/api/conversations', auth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -132,8 +132,6 @@ app.delete('/api/conversations/:id', auth, async (req, res) => {
   }
 });
 
-// ============ MESSAGES ============
-
 app.get('/api/conversations/:id/messages', auth, async (req, res) => {
   try {
     const conv = await pool.query('SELECT id FROM "Conversation" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
@@ -147,8 +145,6 @@ app.get('/api/conversations/:id/messages', auth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// ============ CHAT ============
 
 app.post('/api/chat', auth, async (req, res) => {
   try {
@@ -222,7 +218,8 @@ ATURAN:
     });
 
     if (!aiResponse.ok) {
-      throw new Error(`AI error: ${aiResponse.status}`);
+      const errBody = await aiResponse.text();
+      throw new Error(`AI error: ${aiResponse.status} - ${errBody}`);
     }
 
     const aiData = await aiResponse.json();
@@ -240,8 +237,6 @@ ATURAN:
     res.status(500).json({ error: err.message });
   }
 });
-
-// ============ SOURCES ============
 
 app.get('/api/sources', auth, async (req, res) => {
   try {
@@ -290,30 +285,8 @@ app.delete('/api/sources/:id', auth, async (req, res) => {
   }
 });
 
-// ============ HEALTH CHECK ============
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// ============ SPA FALLBACK ============
-
-if (fs.existsSync(distPath)) {
-  app.get('/', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api/')) {
-      return res.status(404).json({ error: 'Not found' });
-    }
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-}
-
-// ============ START ============
-
 const server = app.listen(PORT, () => {
-  console.log(`Tara AI API running on port ${PORT}`);
+  console.log('Tara AI API running on port ' + PORT);
 });
 server.on('error', (err) => {
   console.error('Server error:', err.message);
