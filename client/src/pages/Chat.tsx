@@ -31,7 +31,12 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [chatTitle, setChatTitle] = useState('New Chat');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   const loadConversations = async () => {
     try {
@@ -67,6 +72,7 @@ export default function Chat() {
     setChatTitle(title);
     setClarification(null);
     loadMessages(id);
+    setSidebarOpen(false);
   };
 
   const handleDeleteConversation = async (id: number) => {
@@ -97,7 +103,6 @@ export default function Chat() {
       setCurrentConvId(data.conversationId);
       setChatTitle(msg.slice(0, 50));
 
-      // Try to parse clarification from AI response
       try {
         const parsed = JSON.parse(data.content);
         if (parsed.needs_clarification && parsed.question) {
@@ -120,6 +125,54 @@ export default function Chat() {
     }
   };
 
+  const handleFileUpload = async (files: FileList) => {
+    setUploading(true);
+    for (const file of Array.from(files)) {
+      const formData = new FormData();
+      formData.append('file', file);
+      await apiFetch('/api/sources', { method: 'POST', body: formData });
+    }
+    setUploading(false);
+  };
+
+  const startVoice = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Browser tidak mendukung voice input');
+      return;
+    }
+
+    if (isRecording && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'id-ID';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput((prev) => prev + transcript);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onerror = () => {
+      setIsRecording(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+  };
+
   const handleLogout = () => {
     removeToken();
     navigate('/login');
@@ -134,20 +187,29 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen bg-white">
-      <Sidebar
-        conversations={conversations}
-        currentConvId={currentConvId}
-        onNewChat={handleNewChat}
-        onSelectConversation={handleSelectConversation}
-        onDeleteConversation={handleDeleteConversation}
-        onShowSources={() => navigate('/sources')}
-        onLogout={handleLogout}
-      />
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:relative md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <Sidebar
+          conversations={conversations}
+          currentConvId={currentConvId}
+          onNewChat={handleNewChat}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={handleDeleteConversation}
+          onShowSources={() => navigate('/sources')}
+          onLogout={handleLogout}
+        />
+      </div>
 
       <div className="flex-1 flex flex-col min-w-0">
         <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-3">
           <button
-            onClick={() => document.querySelector('.sidebar')?.classList.toggle('open')}
+            onClick={() => setSidebarOpen(!sidebarOpen)}
             className="md:hidden w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center"
           >
             ☰
@@ -207,6 +269,32 @@ export default function Chat() {
 
         <div className="px-5 py-4 border-t border-gray-200">
           <div className="max-w-2xl mx-auto flex gap-2 items-end">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-black shrink-0 disabled:opacity-50"
+              title="Upload source"
+            >
+              {uploading ? (
+                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                </svg>
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.docx,.doc,.txt,.md,.csv,.html"
+              multiple
+              onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+            />
+
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -220,12 +308,33 @@ export default function Chat() {
               rows={1}
               className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none resize-none min-h-[44px] max-h-[200px] focus:border-black"
             />
+
+            <button
+              onClick={startVoice}
+              className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+                isRecording
+                  ? 'border-red-300 bg-red-50 text-red-500 animate-pulse-recording'
+                  : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-black'
+              }`}
+              title={isRecording ? 'Stop recording' : 'Voice input'}
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                <path d="M19 10v2a7 7 0 01-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            </button>
+
             <button
               onClick={() => sendMessage()}
               disabled={loading || !input.trim()}
-              className="w-11 h-11 bg-black text-white rounded-xl flex items-center justify-center text-lg shrink-0 hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center shrink-0 hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              ↑
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
             </button>
           </div>
         </div>

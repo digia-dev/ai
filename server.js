@@ -55,6 +55,211 @@ function auth(req, res, next) {
   }
 }
 
+// ============ MODEL CONFIG ============
+
+const MODEL_CONFIG = {
+  'deepseek/deepseek-v4-flash': { name: 'DeepSeek V4 Flash', context: '1M' },
+  'deepseek/deepseek-v3.2': { name: 'DeepSeek V3.2', context: '1M' },
+  'deepseek/deepseek-v4-pro': { name: 'DeepSeek V4 Pro', context: '1M' },
+  'openai/gpt-4o-mini': { name: 'GPT-4o Mini', context: '128K' },
+  'openai/gpt-5.6-luna': { name: 'GPT-5.6 Luna', context: '1M' },
+  'openai/gpt-4.1-mini': { name: 'GPT-4.1 Mini', context: '1M' },
+  'anthropic/claude-3-haiku': { name: 'Claude 3 Haiku', context: '200K' },
+  'anthropic/claude-haiku-4.5': { name: 'Claude Haiku 4.5', context: '200K' },
+  'qwen/qwen3-coder': { name: 'Qwen3 Coder', context: '262K' },
+  'qwen/qwen3.5-flash': { name: 'Qwen3.5 Flash', context: '1M' },
+  'mistralai/mistral-nemo': { name: 'Mistral Nemo', context: '131K' },
+  'meta-llama/llama-3.3-70b-instruct': { name: 'Llama 3.3 70B', context: '131K' },
+  'meta-llama/llama-4-scout': { name: 'Llama 4 Scout', context: '1M' },
+  'google/gemini-2.5-flash-lite': { name: 'Gemini 2.5 Flash Lite', context: '1M' },
+};
+
+const DEFAULT_AGENTS = [
+  {
+    name: 'Tara',
+    icon: '✦',
+    model: 'deepseek/deepseek-v4-flash',
+    temperature: 0.7,
+    isDefault: true,
+    systemPrompt: `Kamu adalah Tara, AI Assistant yang dirancang untuk membantu pengguna menyelesaikan berbagai kebutuhan secara akurat, jelas, profesional, dan mudah dipahami.
+
+IDENTITAS:
+- Nama: Tara
+- Peran: General-purpose AI Assistant
+- Bahasa: Bahasa Indonesia dan English
+- Temperature: 0.7
+- Gaya: Friendly, professional, clear, structured
+
+PRINSIP UTAMA:
+Selalu pahami maksud pengguna terlebih dahulu sebelum memberikan jawaban. Berikan respons yang relevan dengan konteks, langsung menjawab kebutuhan utama, dan hindari informasi yang tidak diperlukan.
+
+KAPABILITAS:
+- Menjawab pertanyaan umum secara akurat dan relevan.
+- Menjelaskan konsep atau informasi kompleks dengan bahasa sederhana.
+- Menganalisis dokumen dan mengekstrak informasi, fakta, poin penting, serta insight yang relevan.
+- Merangkum dokumen atau teks panjang menjadi ringkasan yang ringkas dan informatif.
+- Menerjemahkan Bahasa Indonesia ↔ English dengan mempertahankan makna, konteks, dan tone asli.
+- Membantu menulis, memperbaiki, menyusun, dan mengembangkan berbagai jenis teks.
+- Membantu brainstorming, perencanaan, pengambilan keputusan, dan problem solving.
+- Membantu pengguna menyusun informasi menjadi format yang lebih terstruktur.
+- Menyesuaikan kedalaman jawaban dengan kompleksitas pertanyaan pengguna.
+
+BAHASA:
+- Gunakan bahasa yang sama dengan bahasa utama pengguna.
+- Jika pengguna menggunakan Bahasa Indonesia, jawab dalam Bahasa Indonesia.
+- Jika pengguna menggunakan English, jawab dalam English.
+
+GAYA KOMUNIKASI:
+- Friendly tetapi tetap professional.
+- Gunakan bahasa yang natural dan mudah dipahami.
+- Gunakan heading, bullet points, numbered lists, dan tabel jika membantu keterbacaan.
+
+ATURAN AKURASI:
+- Jangan mengarang fakta, sumber, angka, kutipan, atau informasi yang tidak tersedia.
+- Bedakan antara fakta, interpretasi, asumsi, dan rekomendasi.
+- Jika informasi tidak cukup untuk memberikan jawaban yang dapat diandalkan, jelaskan informasi apa yang kurang.
+
+FORMAT RESPONS:
+Untuk pertanyaan umum:
+1. Jawab langsung pertanyaan utama.
+2. Berikan penjelasan atau detail pendukung.
+3. Tambahkan kesimpulan atau next step jika relevan.
+
+Untuk analisis dokumen:
+1. Ringkasan
+2. Poin-Poin Utama
+3. Insight atau Temuan
+4. Hal yang Perlu Diperhatikan
+5. Kesimpulan
+
+Selalu berkomunikasi dengan sikap helpful, confident, transparent, dan professional.`
+  },
+  {
+    name: 'Data Analyst',
+    icon: '📊',
+    model: 'openai/gpt-4o-mini',
+    temperature: 0.3,
+    isDefault: true,
+    systemPrompt: `You are Data Analyst, a reliable AI assistant for analyzing structured and semi-structured data. Your purpose is to help users understand datasets, identify meaningful patterns, summarize results, and turn findings into clear, actionable insights.
+
+You can analyze data provided as CSV, JSON, or plain text. Always base conclusions on the available data. Never invent values, trends, or statistics.
+
+KAPABILITAS:
+A. Data Understanding - Detect columns, fields, records, and data types.
+B. Statistical Analysis - Generate appropriate statistics based on the dataset.
+C. Insight Generation - Convert analytical results into practical findings.
+D. Data Presentation - Use Markdown tables for structured results.
+E. File Generation - Generate downloadable files when requested (CSV, Markdown).
+
+FORMAT OUTPUT:
+### Summary
+Brief overview of the dataset and analysis.
+
+### Key Statistics
+Relevant statistical results in a Markdown table.
+
+### Key Insights
+- Concise, evidence-based findings.
+
+### Data Quality
+Mention missing, duplicated, inconsistent, or potentially unreliable data.
+
+### Recommended Actions
+Provide practical next steps based directly on the findings.
+
+ATURAN:
+- Be accurate, concise, and transparent.
+- Never fabricate missing data.
+- Explain calculations when they materially affect interpretation.
+- Avoid unnecessary technical jargon.
+- Do not confuse correlation with causation.
+- Flag small sample sizes or limitations when they affect conclusions.
+
+Untuk generate file, gunakan format:
+\`\`\`file:nama-file.csv
+isi file di sini
+\`\`\``
+  },
+  {
+    name: 'Content Writer',
+    icon: '📝',
+    model: 'anthropic/claude-3-haiku',
+    temperature: 0.8,
+    isDefault: true,
+    systemPrompt: `Kamu adalah Content Writer profesional yang membantu pengguna membuat konten berkualitas, relevan, dan orisinal.
+
+KAPABILITAS:
+- Tulis artikel, blog post, landing page copy, social media copy, product description, email, dan copywriting.
+- SEO optimization berdasarkan keyword, search intent, struktur heading, readability, dan relevansi konten.
+- Menghasilkan output dalam Markdown, HTML, atau plain text.
+- Membuat file output .md, .html, atau .txt ketika fitur file generation tersedia.
+- Menyesuaikan tone, audience, panjang, bahasa, dan tujuan konten berdasarkan instruksi pengguna.
+
+GAYA PENULISAN:
+- Engaging, natural, dan mudah dibaca.
+- Struktur jelas menggunakan heading dan subheading yang sesuai.
+- Hindari kalimat generik, filler, dan pengulangan.
+- Gunakan contoh atau detail spesifik jika tersedia.
+- Gunakan Call-to-Action (CTA) yang relevan dengan tujuan konten.
+
+ATURAN:
+- Jangan mengarang fakta, data, kutipan, atau sumber.
+- Jangan menyalin karya orang lain. Hasil harus original.
+- Jika informasi penting belum tersedia, tanyakan pertanyaan yang diperlukan.
+- Untuk SEO, prioritaskan kualitas dan search intent daripada keyword stuffing.
+
+OUTPUT DEFAULT:
+1. Content Title
+2. Main Content
+3. CTA jika relevan
+4. SEO Information untuk konten SEO
+
+Untuk file output, gunakan format:
+\`\`\`file:nama-file.md
+isi file di sini
+\`\`\``
+  },
+  {
+    name: 'Code Assistant',
+    icon: '💻',
+    model: 'qwen/qwen3-coder',
+    temperature: 0.2,
+    isDefault: true,
+    systemPrompt: `Kamu adalah Code Assistant expert yang membantu pengguna menulis, memahami, memperbaiki, dan mengoptimalkan kode secara praktis, akurat, dan mudah dipahami.
+
+KAPABILITAS:
+- Tulis kode dalam berbagai bahasa pemrograman.
+- Debug dan perbaiki error pada kode.
+- Optimasi performa, struktur, readability, dan maintainability.
+- Refactor kode tanpa mengubah behavior yang diharapkan.
+- Menjelaskan kode dan error secara step-by-step.
+- Membuat struktur project dan beberapa file kode.
+- Generate file kode seperti .js, .ts, .py, .html, .css, .json, .sql, dan format lain.
+
+ATURAN:
+- Selalu prioritaskan kode yang benar, sederhana, aman, dan mudah dipelihara.
+- Jangan mengarang API, library, function, atau syntax yang tidak diketahui.
+- Identifikasi root cause sebelum memberikan solusi ketika debugging.
+- Hindari solusi yang unnecessarily complex.
+- Jangan memberikan credential, API key, password, atau secret secara langsung.
+
+FORMAT OUTPUT:
+- Gunakan code blocks dengan syntax highlighting.
+- Berikan penjelasan singkat sebelum kode.
+- Setelah kode, jelaskan bagian penting atau perubahan yang dilakukan.
+- Untuk debugging, gunakan format: 1. Masalah 2. Penyebab 3. Solusi 4. Kode yang diperbaiki.
+- Untuk generate file, gunakan format:
+\`\`\`file:nama-file.ext
+isi file di sini
+\`\`\`
+
+KUALITAS KODE:
+- Gunakan naming yang jelas dan konsisten.
+- Gunakan error handling yang sesuai.
+- Ikuti best practice yang relevan dengan bahasa/framework yang digunakan.`
+  }
+];
+
 // ============ AUTH ============
 
 app.post('/api/auth/register', async (req, res) => {
@@ -65,8 +270,28 @@ app.post('/api/auth/register', async (req, res) => {
     if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
     const hash = await bcrypt.hash(password, 10);
     const result = await pool.query('INSERT INTO "User" (email, name, password) VALUES ($1, $2, $3) RETURNING id', [email, name, hash]);
-    const token = jwt.sign({ id: result.rows[0].id, email, name }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: result.rows[0].id, email, name } });
+    const userId = result.rows[0].id;
+
+    // Create billing with trial tokens
+    await pool.query(
+      'INSERT INTO "UserBilling" ("userId", plan, "tokenBalance", "trialTokens", "trialEndsAt") VALUES ($1, $2, $3, $4, NOW() + INTERVAL \'30 days\')',
+      [userId, 'trial', 10000, 10000]
+    );
+    await pool.query(
+      'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+      [userId, 'trial', 10000, 10000, 'Trial bonus: 10,000 token']
+    );
+
+    // Create default agents
+    for (const agent of DEFAULT_AGENTS) {
+      await pool.query(
+        'INSERT INTO "Agent" ("userId", name, icon, "systemPrompt", model, temperature, "isDefault") VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        [userId, agent.name, agent.icon, agent.systemPrompt, agent.model, agent.temperature, agent.isDefault]
+      );
+    }
+
+    const token = jwt.sign({ id: userId, email, name }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: userId, email, name } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -284,6 +509,503 @@ app.post('/api/sources', auth, upload.single('file'), async (req, res) => {
 app.delete('/api/sources/:id', auth, async (req, res) => {
   try {
     await pool.query('DELETE FROM "Source" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ AGENTS ============
+
+app.get('/api/agents', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name, icon, model, temperature, "maxTokens", "isDefault", "systemPrompt" FROM "Agent" WHERE ("userId" = $1 OR "isDefault" = TRUE) AND "isActive" = TRUE ORDER BY "isDefault" DESC, name ASC',
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/agents', auth, async (req, res) => {
+  try {
+    const { name, icon, model, temperature, maxTokens, systemPrompt } = req.body;
+    if (!name || !systemPrompt) return res.status(400).json({ error: 'Name and system prompt required' });
+    const result = await pool.query(
+      'INSERT INTO "Agent" ("userId", name, icon, model, temperature, "maxTokens", "systemPrompt") VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [req.user.id, name, icon || '🤖', model || 'deepseek/deepseek-v4-flash', temperature || 0.7, maxTokens || 4096, systemPrompt]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/agents/:id', auth, async (req, res) => {
+  try {
+    const { name, icon, model, temperature, maxTokens, systemPrompt } = req.body;
+    const result = await pool.query(
+      'UPDATE "Agent" SET name = COALESCE($1, name), icon = COALESCE($2, icon), model = COALESCE($3, model), temperature = COALESCE($4, temperature), "maxTokens" = COALESCE($5, "maxTokens"), "systemPrompt" = COALESCE($6, "systemPrompt"), "updatedAt" = NOW() WHERE id = $7 AND "userId" = $8 AND "isDefault" = FALSE RETURNING *',
+      [name, icon, model, temperature, maxTokens, systemPrompt, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found or cannot edit default agent' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/agents/:id', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'UPDATE "Agent" SET "isActive" = FALSE WHERE id = $1 AND "userId" = $2 AND "isDefault" = FALSE RETURNING id',
+      [req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found or cannot delete default agent' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ AGENT CONVERSATIONS ============
+
+app.get('/api/agents/:agentId/conversations', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, title, "createdAt", "updatedAt" FROM "AgentConversation" WHERE "agentId" = $1 AND "userId" = $2 ORDER BY "updatedAt" DESC',
+      [req.params.agentId, req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/agents/:agentId/conversations', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'INSERT INTO "AgentConversation" ("agentId", "userId", title) VALUES ($1, $2, $3) RETURNING id, title',
+      [req.params.agentId, req.user.id, req.body.title || 'New Conversation']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/agents/conversations/:id', auth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM "AgentMessage" WHERE "conversationId" = $1', [req.params.id]);
+    await pool.query('DELETE FROM "AgentConversation" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/agents/conversations/:id/messages', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, role, content, "outputFiles", "tokensUsed", "createdAt" FROM "AgentMessage" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC',
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ AGENT CHAT ============
+
+function getMimeType(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  const types = { '.csv': 'text/csv', '.md': 'text/markdown', '.js': 'text/javascript', '.ts': 'text/typescript', '.py': 'text/x-python', '.html': 'text/html', '.css': 'text/css', '.json': 'application/json', '.sql': 'text/plain', '.txt': 'text/plain' };
+  return types[ext] || 'text/plain';
+}
+
+async function extractAndSaveFiles(content, userId, agentId, conversationId) {
+  const files = [];
+  const fileRegex = /```file:([^\n]+)\n([\s\S]*?)```/g;
+  let match;
+
+  while ((match = fileRegex.exec(content)) !== null) {
+    const filename = match[1].trim();
+    const fileContent = match[2];
+
+    const dir = path.join(uploadsPath, 'agent-files', String(userId));
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    const safeName = `${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const filePath = path.join(dir, safeName);
+    fs.writeFileSync(filePath, fileContent);
+
+    const dbResult = await pool.query(
+      `INSERT INTO "AgentFile" ("userId", "agentId", "conversationId", filename, "mimeType", size, path) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, filename`,
+      [userId, agentId || null, conversationId || null, filename, getMimeType(filename), fileContent.length, filePath]
+    );
+
+    files.push({
+      id: dbResult.rows[0].id,
+      name: filename,
+      size: fileContent.length,
+      downloadUrl: `/api/agents/files/${dbResult.rows[0].id}/download`
+    });
+  }
+
+  return files;
+}
+
+app.post('/api/agents/chat', auth, async (req, res) => {
+  try {
+    const { agentId, conversationId, message } = req.body;
+    if (!message || !agentId) return res.status(400).json({ error: 'Agent ID and message required' });
+
+    // Check token balance
+    const billing = await pool.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1', [req.user.id]);
+    if (!billing.rows[0] || billing.rows[0].tokenBalance <= 0) {
+      return res.status(402).json({ error: 'Token habis', upgrade_url: '/account/billing' });
+    }
+
+    // Get agent config
+    const agent = await pool.query(
+      'SELECT * FROM "Agent" WHERE id = $1 AND ("userId" = $2 OR "isDefault" = TRUE) AND "isActive" = TRUE',
+      [agentId, req.user.id]
+    );
+    if (!agent.rows[0]) return res.status(404).json({ error: 'Agent not found' });
+
+    const agentConfig = agent.rows[0];
+    const model = MODEL_CONFIG[agentConfig.model] || { name: agentConfig.model };
+
+    // Create/get conversation
+    let convId = conversationId;
+    if (!convId) {
+      const conv = await pool.query(
+        'INSERT INTO "AgentConversation" ("agentId", "userId", title) VALUES ($1, $2, $3) RETURNING id',
+        [agentId, req.user.id, message.slice(0, 50)]
+      );
+      convId = conv.rows[0].id;
+    }
+
+    // Save user message
+    await pool.query(
+      'INSERT INTO "AgentMessage" ("conversationId", role, content) VALUES ($1, $2, $3)',
+      [convId, 'user', message]
+    );
+
+    // Load conversation history
+    const history = await pool.query(
+      'SELECT role, content FROM "AgentMessage" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC LIMIT 20',
+      [convId]
+    );
+
+    // Call OpenRouter
+    const aiRes = await fetch(process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.APP_URL || 'https://ai.giantara.web.id',
+        'X-Title': `Tara AI - ${agentConfig.name}`,
+      },
+      body: JSON.stringify({
+        model: agentConfig.model,
+        messages: [
+          { role: 'system', content: agentConfig.systemPrompt },
+          ...history.rows,
+          { role: 'user', content: message }
+        ],
+        temperature: agentConfig.temperature,
+        max_tokens: agentConfig.maxTokens || 4096,
+      }),
+    });
+
+    if (!aiRes.ok) {
+      const errBody = await aiRes.text();
+      throw new Error(`AI error ${aiRes.status}: ${errBody}`);
+    }
+
+    const aiData = await aiRes.json();
+    const content = aiData.choices[0].message.content;
+    const tokensUsed = aiData.usage?.total_tokens || 0;
+
+    // Extract files
+    const files = await extractAndSaveFiles(content, req.user.id, agentId, convId);
+
+    // Save AI response
+    await pool.query(
+      'INSERT INTO "AgentMessage" ("conversationId", role, content, "outputFiles", "tokensUsed") VALUES ($1, $2, $3, $4, $5)',
+      [convId, 'assistant', content, JSON.stringify(files), tokensUsed]
+    );
+
+    // Deduct tokens (basic: 1 token per token used)
+    if (tokensUsed > 0) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
+        const newBalance = Math.max(0, (bal.rows[0]?.tokenBalance || 0) - tokensUsed);
+        await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
+        await client.query(
+          'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+          [req.user.id, 'usage', tokensUsed, newBalance, `Agent chat: ${agentConfig.name}`]
+        );
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+      } finally {
+        client.release();
+      }
+    }
+
+    // Update conversation timestamp
+    await pool.query('UPDATE "AgentConversation" SET "updatedAt" = NOW() WHERE id = $1', [convId]);
+
+    res.json({ conversationId: convId, content, files });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ AGENT FILES ============
+
+app.get('/api/agents/files', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT f.id, f.filename, f."mimeType", f.size, f."createdAt", a.name as "agentName" FROM "AgentFile" f LEFT JOIN "Agent" a ON f."agentId" = a.id WHERE f."userId" = $1 ORDER BY f."createdAt" DESC',
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/agents/files/:id/download', auth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM "AgentFile" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    const file = result.rows[0];
+    if (!fs.existsSync(file.path)) return res.status(404).json({ error: 'File not found on disk' });
+    res.download(file.path, file.filename);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/agents/files/:id', auth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT path FROM "AgentFile" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    if (result.rows.length > 0 && fs.existsSync(result.rows[0].path)) {
+      fs.unlinkSync(result.rows[0].path);
+    }
+    await pool.query('DELETE FROM "AgentFile" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ TOKENS & BILLING ============
+
+app.get('/api/account/billing', auth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM "UserBilling" WHERE "userId" = $1', [req.user.id]);
+    if (result.rows.length === 0) {
+      // Create billing if not exists
+      await pool.query(
+        'INSERT INTO "UserBilling" ("userId", plan, "tokenBalance", "trialTokens") VALUES ($1, $2, $3, $4) ON CONFLICT ("userId") DO NOTHING',
+        [req.user.id, 'trial', 10000, 10000]
+      );
+      const newResult = await pool.query('SELECT * FROM "UserBilling" WHERE "userId" = $1', [req.user.id]);
+      return res.json(newResult.rows[0]);
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/account/tokens/history', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, type, amount, balance, description, "createdAt" FROM "TokenLedger" WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 50',
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/account/usage', auth, async (req, res) => {
+  try {
+    const today = await pool.query(
+      'SELECT COALESCE(SUM(amount), 0) as total FROM "TokenLedger" WHERE "userId" = $1 AND type = \'usage\' AND "createdAt" >= CURRENT_DATE',
+      [req.user.id]
+    );
+    const week = await pool.query(
+      'SELECT COALESCE(SUM(amount), 0) as total FROM "TokenLedger" WHERE "userId" = $1 AND type = \'usage\' AND "createdAt" >= CURRENT_DATE - INTERVAL \'7 days\'',
+      [req.user.id]
+    );
+    const month = await pool.query(
+      'SELECT COALESCE(SUM(amount), 0) as total FROM "TokenLedger" WHERE "userId" = $1 AND type = \'usage\' AND "createdAt" >= CURRENT_DATE - INTERVAL \'30 days\'',
+      [req.user.id]
+    );
+    res.json({
+      today: parseInt(today.rows[0].total),
+      week: parseInt(week.rows[0].total),
+      month: parseInt(month.rows[0].total),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ PAYMENTS (MIDTRANS) ============
+
+const TOKEN_PACKAGES = [
+  { id: 'starter', name: 'Starter', tokens: 25000, price: 19000, bonus: 0 },
+  { id: 'basic', name: 'Basic', tokens: 50000, price: 35000, bonus: 0 },
+  { id: 'popular', name: 'Populer', tokens: 100000, price: 69000, bonus: 10000 },
+  { id: 'pro', name: 'Pro', tokens: 250000, price: 149000, bonus: 25000 },
+  { id: 'premium', name: 'Premium', tokens: 500000, price: 249000, bonus: 50000 },
+  { id: 'enterprise', name: 'Enterprise', tokens: 1000000, price: 499000, bonus: 100000 },
+];
+
+app.get('/api/payments/packages', (req, res) => {
+  res.json(TOKEN_PACKAGES);
+});
+
+app.post('/api/payments/create', auth, async (req, res) => {
+  try {
+    const { packageId } = req.body;
+    const pkg = TOKEN_PACKAGES.find(p => p.id === packageId);
+    if (!pkg) return res.status(400).json({ error: 'Invalid package' });
+
+    const orderId = `TARA-${Date.now()}-${req.user.id}`;
+
+    // Save transaction
+    await pool.query(
+      'INSERT INTO "PaymentTransaction" ("userId", "paymentProvider", "orderId", amount, "tokensGranted", status) VALUES ($1, $2, $3, $4, $5, $6)',
+      [req.user.id, 'midtrans', orderId, pkg.price, pkg.tokens + pkg.bonus, 'pending']
+    );
+
+    // Midtrans Snap integration (if configured)
+    if (process.env.MIDTRANS_SERVER_KEY) {
+      const midtransClient = require('midtrans-client');
+      const snap = new midtransClient.Snap({
+        isProduction: process.env.MIDTRANS_PRODUCTION === 'true',
+        serverKey: process.env.MIDTRANS_SERVER_KEY,
+        clientKey: process.env.MIDTRANS_CLIENT_KEY,
+      });
+
+      const parameter = {
+        transaction_details: { order_id: orderId, gross_amount: pkg.price },
+        customer_details: { email: req.user.email, name: req.user.name },
+        callbacks: { finish: `${process.env.APP_URL || 'https://ai.giantara.web.id'}/account/billing` },
+      };
+
+      const transaction = await snap.createTransaction(parameter);
+      return res.json({ orderId, paymentUrl: transaction.redirect_url, token: transaction.token });
+    }
+
+    // Fallback: direct token grant (for testing)
+    await pool.query('UPDATE "PaymentTransaction" SET status = $1 WHERE "orderId" = $2', ['paid', orderId]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
+      const newBalance = (bal.rows[0]?.tokenBalance || 0) + pkg.tokens + pkg.bonus;
+      await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
+      await client.query(
+        'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+        [req.user.id, 'purchase', pkg.tokens + pkg.bonus, newBalance, `Top-up: ${pkg.name} (${pkg.tokens + pkg.bonus} token)`]
+      );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+
+    res.json({ orderId, status: 'paid', tokenBalance: (await pool.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1', [req.user.id])).rows[0].tokenBalance });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/payments/callback', async (req, res) => {
+  try {
+    const { order_id, transaction_status, fraud_status } = req.body;
+
+    if (transaction_status === 'capture' && fraud_status === 'accept') {
+      const payment = await pool.query(
+        'UPDATE "PaymentTransaction" SET status = $1, "providerResponse" = $2, "updatedAt" = NOW() WHERE "orderId" = $3 RETURNING *',
+        ['paid', req.body, order_id]
+      );
+
+      if (payment.rows[0]) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [payment.rows[0].userId]);
+          const newBalance = (bal.rows[0]?.tokenBalance || 0) + payment.rows[0].tokensGranted;
+          await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, payment.rows[0].userId]);
+          await client.query(
+            'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+            [payment.rows[0].userId, 'purchase', payment.rows[0].tokensGranted, newBalance, `Top-up: ${payment.rows[0].tokensGranted} token`]
+          );
+          await client.query('COMMIT');
+        } catch (e) {
+          await client.query('ROLLBACK');
+        } finally {
+          client.release();
+        }
+      }
+    }
+
+    res.status(200).json({ status: 'ok' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ ACCOUNT ============
+
+app.get('/api/account/profile', auth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, email, name, "createdAt" FROM "User" WHERE id = $1', [req.user.id]);
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/account/profile', auth, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    const result = await pool.query(
+      'UPDATE "User" SET name = COALESCE($1, name), email = COALESCE($2, email), "updatedAt" = NOW() WHERE id = $3 RETURNING id, email, name',
+      [name, email, req.user.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/account/password', auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both passwords required' });
+    const user = await pool.query('SELECT password FROM "User" WHERE id = $1', [req.user.id]);
+    const valid = await bcrypt.compare(currentPassword, user.rows[0].password);
+    if (!valid) return res.status(401).json({ error: 'Current password incorrect' });
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE "User" SET password = $1, "updatedAt" = NOW() WHERE id = $2', [hash, req.user.id]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
