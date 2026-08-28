@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import MessageBubble from '../components/MessageBubble';
+import { Menu, Plus, Mic, MicOff, ArrowUp, ArrowLeft, Paperclip } from 'lucide-react';
 
 interface Agent {
   id: number;
@@ -156,8 +157,12 @@ export default function AgentChat() {
       {/* Agent Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 w-[280px] bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 md:relative md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <button onClick={() => navigate('/agents')} className="text-xs text-gray-500 hover:text-black">← Agents</button>
-          <button onClick={() => { setCurrentConvId(null); setMessages([]); }} className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-lg hover:bg-gray-100">+</button>
+          <button onClick={() => navigate('/agents')} className="flex items-center gap-1 text-xs text-gray-500 hover:text-black">
+            <ArrowLeft className="w-3 h-3" /> Agents
+          </button>
+          <button onClick={() => { setCurrentConvId(null); setMessages([]); }} className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-100">
+            <Plus className="w-4 h-4" />
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {conversations.map(c => (
@@ -172,7 +177,9 @@ export default function AgentChat() {
       {/* Main Chat */}
       <div className="flex-1 flex flex-col min-w-0">
         <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center">☰</button>
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center">
+            <Menu className="w-4 h-4" />
+          </button>
           <span className="text-lg">{agent.icon}</span>
           <span className="text-sm font-semibold">{agent.name}</span>
           <select value={currentModel} onChange={e => setCurrentModel(e.target.value)} className="ml-2 text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none">
@@ -196,7 +203,7 @@ export default function AgentChat() {
                 <div className="flex gap-2 flex-wrap mb-4 ml-11">
                   {m.outputFiles.map((f: any, i: number) => (
                     <a key={i} href={f.downloadUrl} className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 rounded-lg text-xs hover:bg-gray-200 transition-colors">
-                      📎 {f.name}
+                      <Paperclip className="w-3 h-3" /> {f.name}
                       <span className="text-gray-400">({(f.size / 1024).toFixed(1)} KB)</span>
                     </a>
                   ))}
@@ -222,10 +229,10 @@ export default function AgentChat() {
           <div className="max-w-2xl mx-auto flex gap-2 items-end">
             <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} placeholder={`Tanya ${agent.name}...`} rows={1} className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none resize-none min-h-[44px] max-h-[200px] focus:border-black" />
             <button onClick={startVoice} className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${isRecording ? 'border-red-300 bg-red-50 text-red-500 animate-pulse-recording' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-black'}`}>
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+              {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
             <button onClick={() => sendMessage()} disabled={loading || !input.trim()} className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center shrink-0 hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed">
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
+              <ArrowUp className="w-5 h-5" />
             </button>
           </div>
         </div>

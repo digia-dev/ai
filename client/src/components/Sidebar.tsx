@@ -1,6 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
+import {
+  Plus,
+  MessageSquare,
+  X,
+  Bot,
+  Folder,
+  User,
+  UserCircle,
+  CreditCard,
+  BarChart3,
+  FileText,
+  Zap,
+  LogOut,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 
 interface Conversation {
   id: number;
@@ -68,10 +84,10 @@ export default function Sidebar({
         </div>
         <button
           onClick={onNewChat}
-          className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-lg hover:bg-gray-100"
+          className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-100"
           title="New Chat"
         >
-          +
+          <Plus className="w-4 h-4" />
         </button>
       </div>
 
@@ -81,7 +97,7 @@ export default function Sidebar({
           className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-500 cursor-pointer hover:text-gray-700"
           onClick={() => navigate('/chat')}
         >
-          <span>💬</span>
+          <MessageSquare className="w-4 h-4" />
           <span>Chat</span>
         </div>
         {conversations.map((c) => (
@@ -97,12 +113,11 @@ export default function Sidebar({
               onClick={(e) => { e.stopPropagation(); onDeleteConversation(c.id); }}
               className="opacity-0 hover:opacity-100 text-gray-400 hover:text-black ml-2"
             >
-              ×
+              <X className="w-3 h-3" />
             </button>
           </div>
         ))}
 
-        {/* Divider */}
         <div className="my-2 border-t border-gray-200" />
 
         {/* Agents Section */}
@@ -110,9 +125,11 @@ export default function Sidebar({
           className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-500 cursor-pointer hover:text-gray-700"
           onClick={() => toggleSection('agents')}
         >
-          <span>🤖</span>
+          <Bot className="w-4 h-4" />
           <span>Agents</span>
-          <span className="ml-auto text-[10px]">{expandedSections.agents ? '▾' : '▸'}</span>
+          <span className="ml-auto">
+            {expandedSections.agents ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          </span>
         </div>
         {expandedSections.agents && (
           <>
@@ -130,13 +147,12 @@ export default function Sidebar({
               onClick={() => navigate('/agents')}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-gray-100 text-gray-500"
             >
-              <span>+</span>
+              <Plus className="w-4 h-4" />
               <span>Create New Agent</span>
             </div>
           </>
         )}
 
-        {/* Divider */}
         <div className="my-2 border-t border-gray-200" />
 
         {/* Collection */}
@@ -144,11 +160,10 @@ export default function Sidebar({
           onClick={() => navigate('/collection')}
           className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-500 cursor-pointer hover:text-gray-700"
         >
-          <span>📁</span>
+          <Folder className="w-4 h-4" />
           <span>Collection</span>
         </div>
 
-        {/* Divider */}
         <div className="my-2 border-t border-gray-200" />
 
         {/* Account Section */}
@@ -156,9 +171,11 @@ export default function Sidebar({
           className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-500 cursor-pointer hover:text-gray-700"
           onClick={() => toggleSection('account')}
         >
-          <span>👤</span>
+          <User className="w-4 h-4" />
           <span>Account</span>
-          <span className="ml-auto text-[10px]">{expandedSections.account ? '▾' : '▸'}</span>
+          <span className="ml-auto">
+            {expandedSections.account ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          </span>
         </div>
         {expandedSections.account && (
           <>
@@ -166,27 +183,33 @@ export default function Sidebar({
               onClick={() => navigate('/account')}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-gray-100 mb-0.5"
             >
-              <span>📋</span>
+              <UserCircle className="w-4 h-4" />
               <span>Profile</span>
             </div>
             <div
               onClick={() => navigate('/account/billing')}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-gray-100 mb-0.5"
             >
-              <span>💳</span>
+              <CreditCard className="w-4 h-4" />
               <span>Token & Billing</span>
             </div>
             <div
               onClick={() => navigate('/account/history')}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-gray-100 mb-0.5"
             >
-              <span>📊</span>
+              <BarChart3 className="w-4 h-4" />
               <span>Usage History</span>
+            </div>
+            <div
+              onClick={onLogout}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-gray-100 text-red-500 hover:text-red-600"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
             </div>
           </>
         )}
 
-        {/* Divider */}
         <div className="my-2 border-t border-gray-200" />
 
         {/* Sources */}
@@ -194,16 +217,16 @@ export default function Sidebar({
           onClick={onShowSources}
           className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-500 cursor-pointer hover:text-gray-700"
         >
-          <span>📄</span>
+          <FileText className="w-4 h-4" />
           <span>Sources</span>
         </div>
       </div>
 
       {/* Token Balance */}
       <div className="p-3 border-t border-gray-200">
-        <div className="bg-white border border-gray-200 rounded-lg p-3 mb-2">
+        <div className="bg-white border border-gray-200 rounded-lg p-3">
           <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-gray-500">⚡ Token tersisa</span>
+            <span className="text-gray-500 flex items-center gap-1"><Zap className="w-3 h-3" /> Token tersisa</span>
             <span className="font-semibold">{formatTokens(tokenBalance)}</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-1.5">
@@ -213,12 +236,6 @@ export default function Sidebar({
             />
           </div>
         </div>
-        <button
-          onClick={onLogout}
-          className="w-full py-2 rounded-lg border border-gray-200 bg-white text-xs hover:bg-gray-50"
-        >
-          Logout
-        </button>
       </div>
     </div>
   );
