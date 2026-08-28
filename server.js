@@ -24,9 +24,15 @@ app.use(express.json({ limit: '10mb' }));
 const distPath = path.join('/home/giantar1/ai', 'client', 'dist');
 const uploadsPath = path.join('/home/giantar1/ai', 'uploads');
 if (!fs.existsSync(uploadsPath)) fs.mkdirSync(uploadsPath, { recursive: true });
-if (fs.existsSync(distPath)) {
+const distExists = fs.existsSync(distPath);
+if (distExists) {
   app.use(express.static(distPath));
 }
+
+// Debug route
+app.get('/api/debug', (req, res) => {
+  res.json({ distPath, distExists, __dirname: __dirname, files: fs.existsSync(distPath) ? fs.readdirSync(distPath) : [] });
+});
 
 const upload = multer({
   dest: path.join('/home/giantar1/ai', 'uploads'),
