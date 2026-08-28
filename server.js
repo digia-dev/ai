@@ -21,6 +21,11 @@ const pool = new pg.Pool({
 app.use(cors({ origin: ['https://ai.giantara.web.id', 'http://localhost:5173'] }));
 app.use(express.json({ limit: '10mb' }));
 
+const distPath = path.join(__dirname, 'client', 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+}
+
 const upload = multer({
   dest: path.join(__dirname, 'uploads'),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -276,6 +281,17 @@ app.delete('/api/sources/:id', auth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ============ SPA FALLBACK ============
+
+if (fs.existsSync(distPath)) {
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 // ============ HEALTH CHECK ============
 
