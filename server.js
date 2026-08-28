@@ -284,6 +284,12 @@ app.delete('/api/sources/:id', auth, async (req, res) => {
   }
 });
 
+// ============ HEALTH CHECK ============
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // ============ SPA FALLBACK ============
 
 if (fs.existsSync(distPath)) {
@@ -294,12 +300,6 @@ if (fs.existsSync(distPath)) {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
-
-// ============ HEALTH CHECK ============
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 // ============ START ============
 
