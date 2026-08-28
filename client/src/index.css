@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  --animate-blink: blink 1.4s infinite both;
+}
+
+@keyframes blink {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+}

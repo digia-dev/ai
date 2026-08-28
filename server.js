@@ -1,28 +1,30 @@
-const express = require('express');
-const path = require('path');
-const mysql = require('mysql2/promise');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const multer = require('multer');
-const cors = require('cors');
-const fs = require('fs');
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import pg from 'pg';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import multer from 'multer';
+import cors from 'cors';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'tara-ai-jwt-secret-2026-secure-change-in-production';
 
-const pool = mysql.createPool({
-  host: 'localhost',
+const pool = new pg.Pool({
   user: process.env.DB_USER || 'giantar1_tara',
   password: process.env.DB_PASS || 'TaraAI2026Secure!',
-  database: process.env.DB_NAME || 'giantar1_tara',
-  waitForConnections: true,
-  connectionLimit: 5,
+  database: process.env.DB_NAME || 'giantar1_tara_ai',
+  host: process.env.DB_HOST || '/var/run/postgresql',
 });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'client', 'dist')));
 
 const upload = multer({
   dest: path.join(__dirname, 'uploads'),
@@ -45,16 +47,18 @@ function auth(req, res, next) {
   }
 }
 
+// ============ AUTH ============
+
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, name, password } = req.body;
     if (!email || !name || !password) return res.status(400).json({ error: 'All fields required' });
-    const [existing] = await pool.query('SELECT id FROM User WHERE email = ?', [email]);
-    if (existing.length > 0) return res.status(409).json({ error: 'Email already registered' });
+    const existing = await pool.query('SELECT id FROM "User" WHERE email = $1', [email]);
+    if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
     const hash = await bcrypt.hash(password, 10);
-    const [result] = await pool.query('INSERT INTO User (email, name, password) VALUES (?, ?, ?)', [email, name, hash]);
-    const token = jwt.sign({ id: result.insertId, email, name }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: result.insertId, email, name } });
+    const result = await pool.query('INSERT INTO "User" (email, name, password) VALUES ($1, $2, $3) RETURNING id', [email, name, hash]);
+    const token = jwt.sign({ id: result.rows[0].id, email, name }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: result.rows[0].id, email, name } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -63,9 +67,9 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const [rows] = await pool.query('SELECT * FROM User WHERE email = ?', [email]);
-    if (rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
-    const user = rows[0];
+    const result = await pool.query('SELECT * FROM "User" WHERE email = $1', [email]);
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+    const user = result.rows[0];
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
     const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
@@ -76,41 +80,67 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 app.get('/api/auth/me', auth, async (req, res) => {
-  const [rows] = await pool.query('SELECT id, email, name, createdAt FROM User WHERE id = ?', [req.user.id]);
-  res.json(rows[0] || null);
+  try {
+    const result = await pool.query('SELECT id, email, name, "createdAt" FROM "User" WHERE id = $1', [req.user.id]);
+    res.json(result.rows[0] || null);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+// ============ CONVERSATIONS ============
+
 app.get('/api/conversations', auth, async (req, res) => {
-  const [rows] = await pool.query(
-    'SELECT id, title, createdAt, updatedAt FROM Conversation WHERE userId = ? ORDER BY updatedAt DESC',
-    [req.user.id]
-  );
-  res.json(rows);
+  try {
+    const result = await pool.query(
+      'SELECT id, title, "createdAt", "updatedAt" FROM "Conversation" WHERE "userId" = $1 ORDER BY "updatedAt" DESC',
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/conversations', auth, async (req, res) => {
-  const [result] = await pool.query(
-    'INSERT INTO Conversation (userId, title) VALUES (?, ?)',
-    [req.user.id, req.body.title || 'New Chat']
-  );
-  res.json({ id: result.insertId, title: req.body.title || 'New Chat' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO "Conversation" ("userId", title) VALUES ($1, $2) RETURNING id, title',
+      [req.user.id, req.body.title || 'New Chat']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.delete('/api/conversations/:id', auth, async (req, res) => {
-  await pool.query('DELETE FROM Message WHERE conversationId = ?', [req.params.id]);
-  await pool.query('DELETE FROM Conversation WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
-  res.json({ ok: true });
+  try {
+    await pool.query('DELETE FROM "Message" WHERE "conversationId" = $1', [req.params.id]);
+    await pool.query('DELETE FROM "Conversation" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+// ============ MESSAGES ============
+
 app.get('/api/conversations/:id/messages', auth, async (req, res) => {
-  const [conv] = await pool.query('SELECT id FROM Conversation WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
-  if (conv.length === 0) return res.status(404).json({ error: 'Not found' });
-  const [rows] = await pool.query(
-    'SELECT id, role, content, metadata, citations, createdAt FROM Message WHERE conversationId = ? ORDER BY createdAt ASC',
-    [req.params.id]
-  );
-  res.json(rows);
+  try {
+    const conv = await pool.query('SELECT id FROM "Conversation" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    if (conv.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    const result = await pool.query(
+      'SELECT id, role, content, metadata, citations, "createdAt" FROM "Message" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC',
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
+
+// ============ CHAT ============
 
 app.post('/api/chat', auth, async (req, res) => {
   try {
@@ -119,20 +149,20 @@ app.post('/api/chat', auth, async (req, res) => {
 
     let convId = conversationId;
     if (!convId) {
-      const [result] = await pool.query(
-        'INSERT INTO Conversation (userId, title) VALUES (?, ?)',
+      const result = await pool.query(
+        'INSERT INTO "Conversation" ("userId", title) VALUES ($1, $2) RETURNING id',
         [req.user.id, message.slice(0, 50)]
       );
-      convId = result.insertId;
+      convId = result.rows[0].id;
     }
 
     await pool.query(
-      'INSERT INTO Message (conversationId, role, content) VALUES (?, ?, ?)',
+      'INSERT INTO "Message" ("conversationId", role, content) VALUES ($1, $2, $3)',
       [convId, 'user', message]
     );
 
-    const [sources] = await pool.query(
-      'SELECT name, content FROM Source WHERE userId = ? LIMIT 5',
+    const sources = await pool.query(
+      'SELECT name, content FROM "Source" WHERE "userId" = $1 LIMIT 5',
       [req.user.id]
     );
 
@@ -156,16 +186,16 @@ ATURAN:
 
     const contextMessages = [{ role: 'system', content: systemPrompt }];
 
-    if (sources.length > 0) {
-      const sourceContext = sources.map(s => `[${s.name}]: ${s.content?.slice(0, 2000) || ''}`).join('\n\n');
+    if (sources.rows.length > 0) {
+      const sourceContext = sources.rows.map(s => `[${s.name}]: ${s.content?.slice(0, 2000) || ''}`).join('\n\n');
       contextMessages.push({ role: 'system', content: `Dokumen yang tersedia:\n${sourceContext}` });
     }
 
-    const [history] = await pool.query(
-      'SELECT role, content FROM Message WHERE conversationId = ? ORDER BY createdAt ASC LIMIT 20',
+    const history = await pool.query(
+      'SELECT role, content FROM "Message" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC LIMIT 20',
       [convId]
     );
-    contextMessages.push(...history.map(m => ({ role: m.role, content: m.content })));
+    contextMessages.push(...history.rows.map(m => ({ role: m.role, content: m.content })));
 
     const aiResponse = await fetch(process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -191,11 +221,11 @@ ATURAN:
     const reply = aiData.choices[0].message.content;
 
     await pool.query(
-      'INSERT INTO Message (conversationId, role, content) VALUES (?, ?, ?)',
+      'INSERT INTO "Message" ("conversationId", role, content) VALUES ($1, $2, $3)',
       [convId, 'assistant', reply]
     );
 
-    await pool.query('UPDATE Conversation SET updatedAt = NOW() WHERE id = ?', [convId]);
+    await pool.query('UPDATE "Conversation" SET "updatedAt" = NOW() WHERE id = $1', [convId]);
 
     res.json({ conversationId: convId, content: reply });
   } catch (err) {
@@ -203,12 +233,18 @@ ATURAN:
   }
 });
 
+// ============ SOURCES ============
+
 app.get('/api/sources', auth, async (req, res) => {
-  const [rows] = await pool.query(
-    'SELECT id, name, format, wordCount, status, createdAt FROM Source WHERE userId = ? ORDER BY createdAt DESC',
-    [req.user.id]
-  );
-  res.json(rows);
+  try {
+    const result = await pool.query(
+      'SELECT id, name, format, "wordCount", status, "createdAt" FROM "Source" WHERE "userId" = $1 ORDER BY "createdAt" DESC',
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/sources', auth, upload.single('file'), async (req, res) => {
@@ -227,24 +263,32 @@ app.post('/api/sources', auth, upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'File or text content required' });
     }
     const wordCount = content.split(/\s+/).length;
-    const [result] = await pool.query(
-      'INSERT INTO Source (userId, name, format, content, wordCount, status) VALUES (?, ?, ?, ?, ?, ?)',
+    const result = await pool.query(
+      'INSERT INTO "Source" ("userId", name, format, content, "wordCount", status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, format, "wordCount", status',
       [req.user.id, name, format, content, wordCount, 'ready']
     );
-    res.json({ id: result.insertId, name, format, wordCount, status: 'ready' });
+    res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 app.delete('/api/sources/:id', auth, async (req, res) => {
-  await pool.query('DELETE FROM Source WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
-  res.json({ ok: true });
+  try {
+    await pool.query('DELETE FROM "Source" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+// ============ SPA FALLBACK ============
+
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'client', 'dist', 'index.html'));
 });
+
+// ============ START ============
 
 const server = app.listen(PORT, () => {
   console.log(`Tara AI running on port ${PORT}`);
@@ -252,7 +296,7 @@ const server = app.listen(PORT, () => {
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is in use. Trying port ${PORT + 1}...`);
+    console.error(`Port ${PORT} in use, trying ${PORT + 1}...`);
     server.listen(PORT + 1, () => {
       console.log(`Tara AI running on port ${PORT + 1}`);
     });
