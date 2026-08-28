@@ -289,12 +289,3 @@ app.get('*', (req, res) => {
 const server = app.listen(PORT, () => {
   console.log(`Tara AI running on port ${PORT}`);
 });
-
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} in use, trying ${PORT + 1}...`);
-    server.listen(PORT + 1, () => {
-      console.log(`Tara AI running on port ${PORT + 1}`);
-    });
-  }
-});
