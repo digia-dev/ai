@@ -1,5 +1,7 @@
 import { getToken, removeToken } from './auth';
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getToken();
   const headers: Record<string, string> = {};
@@ -12,7 +14,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     headers['Content-Type'] = 'application/json';
   }
 
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE}${url}`, {
     ...options,
     headers: {
       ...headers,

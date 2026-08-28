@@ -10,8 +10,8 @@ const needsInstall = !fs.existsSync(nodeModules) ||
   !fs.existsSync(path.join(nodeModules, 'pg'));
 
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/html' });
-  res.end('<html><body><h1>Tara AI</h1><p>Loading...</p></body></html>');
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ status: 'loading', message: 'Installing dependencies...' }));
 });
 
 server.listen(PORT, () => {
@@ -25,7 +25,8 @@ server.listen(PORT, () => {
 
   console.log('Installing dependencies...');
   const { spawn } = require('child_process');
-  const npm = path.join('/home/giantar1/nodevenv/ai/22/bin/npm');
+  const subdomain = path.basename(__dirname);
+  const npm = path.join('/home/giantar1/nodevenv', subdomain, '22/bin/npm');
   const proc = spawn(npm, ['install', '--production'], {
     cwd: __dirname,
     stdio: 'inherit'

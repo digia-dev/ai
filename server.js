@@ -8,7 +8,7 @@ const cors = require('cors');
 const fs = require('fs');
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'tara-ai-jwt-secret-2026-secure-change-in-production';
 
 const pool = new pg.Pool({
@@ -18,9 +18,8 @@ const pool = new pg.Pool({
   host: process.env.DB_HOST || '/var/run/postgresql',
 });
 
-app.use(cors());
+app.use(cors({ origin: ['https://ai.giantara.web.id', 'http://localhost:5173'] }));
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'client', 'dist')));
 
 const upload = multer({
   dest: path.join(__dirname, 'uploads'),
@@ -278,17 +277,16 @@ app.delete('/api/sources/:id', auth, async (req, res) => {
   }
 });
 
-// ============ SPA FALLBACK ============
+// ============ HEALTH CHECK ============
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'client', 'dist', 'index.html'));
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // ============ START ============
 
-const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
-  console.log(`Tara AI running on port ${PORT}`);
+  console.log(`Tara AI API running on port ${PORT}`);
 });
 server.on('error', (err) => {
   console.error('Server error:', err.message);
