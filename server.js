@@ -22,7 +22,8 @@ app.use(cors({ origin: ['https://ai.giantara.web.id', 'http://localhost:5173'] }
 app.use(express.json({ limit: '10mb' }));
 
 const distPath = path.join(__dirname, 'client', 'dist');
-console.log('Dist path:', distPath, 'exists:', fs.existsSync(distPath));
+const uploadsPath = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsPath)) fs.mkdirSync(uploadsPath, { recursive: true });
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
 }
