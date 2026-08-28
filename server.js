@@ -287,51 +287,10 @@ app.get('*', (req, res) => {
 // ============ START ============
 
 const PORT = process.env.PORT || 3000;
-
-function killProcessOnPort(port) {
-  try {
-    const { execSync } = require('child_process');
-    const hexPort = port.toString(16).toUpperCase().padStart(4, '0');
-    const tcp = execSync('cat /proc/net/tcp /proc/net/tcp6 2>/dev/null').toString();
-    const lines = tcp.split('\n').filter(l => l.toUpperCase().includes(':' + hexPort + ' '));
-    const myPid = process.pid;
-    for (const line of lines) {
-      const parts = line.trim().split(/\s+/);
-      const inode = parts[9];
-      if (!inode || inode === '0') continue;
-      const fdSearch = execSync(`find /proc -maxdepth 4 -path '*/fd/*' -exec ls -la {} \\; 2>/dev/null | grep "socket:\\[${inode}\\]" | head -1`).toString();
-      const pidMatch = fdSearch.match(/\/proc\/(\d+)\//);
-      if (pidMatch && parseInt(pidMatch[1]) !== myPid) {
-        console.log(`Killing PID ${pidMatch[1]} on port ${port}`);
-        execSync(`kill -9 ${pidMatch[1]} 2>/dev/null`);
-      }
-    }
-  } catch (e) {}
-}
-
-async function tryListen(attempts) {
-  for (let i = 0; i < attempts; i++) {
-    killProcessOnPort(PORT);
-    await new Promise(r => setTimeout(r, 500));
-    try {
-      await new Promise((resolve, reject) => {
-        const server = app.listen(PORT, '0.0.0.0', () => {
-          console.log(`Tara AI running on port ${PORT}`);
-          resolve(server);
-        });
-        server.on('error', reject);
-      });
-      return;
-    } catch (err) {
-      if (err.code === 'EADDRINUSE' && i < attempts - 1) {
-        console.log(`Port ${PORT} busy, retry ${i + 1}/${attempts}...`);
-        await new Promise(r => setTimeout(r, 2000));
-      } else {
-        console.error('Failed to start:', err.message);
-        process.exit(1);
-      }
-    }
-  }
-}
-
-tryListen(5);
+const server = app.listen(PORT, () => {
+  console.log(`Tara AI running on port ${PORT}`);
+});
+server.on('error', (err) => {
+  console.error('Server error:', err.message);
+  process.exit(1);
+});
