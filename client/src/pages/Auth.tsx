@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { setToken } from '../lib/auth';
 import { apiFetch } from '../lib/api';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -9,26 +10,27 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
 
+    if (isRegister && password !== confirmPassword) {
+      setError('Password tidak cocok');
+      return;
+    }
+
+    setLoading(true);
     try {
       const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
       const body = isRegister ? { email, password, name } : { email, password };
-
-      const res = await apiFetch(endpoint, {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-
+      const res = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-
       setToken(data.token);
       navigate('/chat');
     } catch (err: any) {
@@ -45,76 +47,63 @@ export default function Auth() {
           <svg viewBox="0 0 32 32" className="w-10 h-10 mx-auto mb-4">
             <path d="M16 2L28 16L16 30L4 16L16 2Z" fill="black"/>
           </svg>
-          <h1 className="text-2xl font-bold">{isRegister ? 'Create Account' : 'Tara AI'}</h1>
+          <h1 className="text-2xl font-bold">{isRegister ? 'Buat Akun' : 'Tara AI'}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {isRegister ? 'Join Giantara ecosystem' : 'Your AI-powered assistant by Giantara'}
+            {isRegister ? 'Gabung dengan ekosistem Giantara' : 'Asisten AI bertenaga Giantara'}
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4">
-            {error}
-          </div>
+          <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4">{error}</div>
         )}
 
         <form onSubmit={handleSubmit}>
           {isRegister && (
             <div className="mb-4">
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-black"
-                required
-              />
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Nama</label>
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama kamu" className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-black" required />
             </div>
           )}
 
           <div className="mb-4">
             <label className="block text-xs font-semibold text-gray-500 mb-1.5">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-black"
-              required
-            />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="kamu@contoh.com" className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-black" required />
           </div>
 
           <div className="mb-4">
             <label className="block text-xs font-semibold text-gray-500 mb-1.5">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min 6 characters"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-black"
-              required
-              minLength={6}
-            />
+            <div className="relative">
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 karakter" className="w-full px-3 py-2.5 pr-10 border border-gray-200 rounded-lg text-sm outline-none focus:border-black" required minLength={6} />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 bg-black text-white rounded-lg text-sm font-semibold hover:bg-gray-800 disabled:opacity-50"
-          >
-            {loading ? 'Loading...' : isRegister ? 'Register' : 'Login'}
+          {isRegister && (
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Konfirmasi Password</label>
+              <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Ulangi password" className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-black" required minLength={6} />
+            </div>
+          )}
+
+          <button type="submit" disabled={loading} className="w-full py-2.5 bg-black text-white rounded-lg text-sm font-semibold hover:bg-gray-800 disabled:opacity-50">
+            {loading ? 'Memuat...' : isRegister ? 'Daftar' : 'Masuk'}
           </button>
         </form>
 
         <p className="text-center text-xs text-gray-500 mt-5">
-          {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
-          <button
-            onClick={() => { setIsRegister(!isRegister); setError(''); }}
-            className="text-black font-semibold hover:underline"
-          >
-            {isRegister ? 'Login' : 'Register'}
+          {isRegister ? 'Sudah punya akun?' : 'Belum punya akun?'}{' '}
+          <button onClick={() => { setIsRegister(!isRegister); setError(''); setConfirmPassword(''); }} className="text-black font-semibold hover:underline">
+            {isRegister ? 'Masuk' : 'Daftar'}
           </button>
         </p>
+
+        {!isRegister && (
+          <p className="text-center text-xs text-gray-400 mt-3">
+            <button className="hover:underline hover:text-black">Lupa password?</button>
+          </p>
+        )}
       </div>
     </div>
   );

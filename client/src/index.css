@@ -4,6 +4,9 @@
   --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif;
   --animate-blink: blink 1.4s infinite both;
   --animate-pulse-recording: pulse-recording 1.5s ease-in-out infinite;
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-up: slide-up 0.2s ease-out;
+  --animate-scale-in: scale-in 0.15s ease-out;
 }
 
 @keyframes blink {
@@ -14,6 +17,21 @@
 @keyframes pulse-recording {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 body {

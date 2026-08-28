@@ -9,6 +9,8 @@ import Account from './pages/Account';
 import AccountBilling from './pages/AccountBilling';
 import AccountHistory from './pages/AccountHistory';
 import Collection from './pages/Collection';
+import AppLayout from './components/AppLayout';
+import { ToastContainer } from './components/Toast';
 import { getCurrentUser } from './lib/auth';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -22,14 +24,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">Memuat...</div>;
   if (!authed) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  return <AppLayout>{children}</AppLayout>;
 }
 
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         <Route path="/login" element={<Auth />} />
         <Route path="/register" element={<Auth />} />

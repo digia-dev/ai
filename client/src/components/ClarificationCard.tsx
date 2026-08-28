@@ -12,7 +12,7 @@ interface ClarificationCardProps {
 
 export default function ClarificationCard({ question, options, onSelect }: ClarificationCardProps) {
   return (
-    <div className="max-w-2xl mx-auto mb-4 ml-11">
+    <div className="max-w-2xl mx-auto mb-4 pl-11">
       <div className="border border-gray-200 rounded-xl p-4 shadow-sm">
         <p className="text-sm font-medium mb-3">{question}</p>
         <div className="space-y-2">
