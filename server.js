@@ -56,11 +56,11 @@ app.post('/api/auth/register', async (req, res) => {
     const { email, name, password } = req.body;
     if (!email || !name || !password) return res.status(400).json({ error: 'All fields required' });
 
-    const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
+    const [existing] = await pool.query('SELECT id FROM User WHERE email = ?', [email]);
     if (existing.length > 0) return res.status(409).json({ error: 'Email already registered' });
 
     const hash = await bcrypt.hash(password, 10);
-    const [result] = await pool.query('INSERT INTO users (email, name, password) VALUES (?, ?, ?)', [email, name, hash]);
+    const [result] = await pool.query('INSERT INTO User (email, name, password) VALUES (?, ?, ?)', [email, name, hash]);
 
     const token = jwt.sign({ id: result.insertId, email, name }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user: { id: result.insertId, email, name } });
@@ -72,7 +72,7 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+    const [rows] = await pool.query('SELECT * FROM User WHERE email = ?', [email]);
     if (rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
 
     const user = rows[0];
@@ -87,42 +87,42 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 app.get('/api/auth/me', auth, async (req, res) => {
-  const [rows] = await pool.query('SELECT id, email, name, createdAt FROM users WHERE id = ?', [req.user.id]);
+  const [rows] = await pool.query('SELECT id, email, name, createdAt FROM User WHERE id = ?', [req.user.id]);
   res.json(rows[0] || null);
 });
 
 // ============ CONVERSATION ROUTES ============
 
-app.get('/api/conversations', auth, async (req, res) => {
+app.get('/api/Conversation', auth, async (req, res) => {
   const [rows] = await pool.query(
-    'SELECT id, title, createdAt, updatedAt FROM conversations WHERE userId = ? ORDER BY updatedAt DESC',
+    'SELECT id, title, createdAt, updatedAt FROM Conversation WHERE userId = ? ORDER BY updatedAt DESC',
     [req.user.id]
   );
   res.json(rows);
 });
 
-app.post('/api/conversations', auth, async (req, res) => {
+app.post('/api/Conversation', auth, async (req, res) => {
   const [result] = await pool.query(
-    'INSERT INTO conversations (userId, title) VALUES (?, ?)',
+    'INSERT INTO Conversation (userId, title) VALUES (?, ?)',
     [req.user.id, req.body.title || 'New Chat']
   );
   res.json({ id: result.insertId, title: req.body.title || 'New Chat' });
 });
 
-app.delete('/api/conversations/:id', auth, async (req, res) => {
-  await pool.query('DELETE FROM messages WHERE conversationId = ? AND conversationId IN (SELECT id FROM conversations WHERE userId = ?)', [req.params.id, req.user.id]);
-  await pool.query('DELETE FROM conversations WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
+app.delete('/api/Conversation/:id', auth, async (req, res) => {
+  await pool.query('DELETE FROM Message WHERE conversationId = ? AND conversationId IN (SELECT id FROM Conversation WHERE userId = ?)', [req.params.id, req.user.id]);
+  await pool.query('DELETE FROM Conversation WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
   res.json({ ok: true });
 });
 
 // ============ MESSAGE ROUTES ============
 
-app.get('/api/conversations/:id/messages', auth, async (req, res) => {
-  const [conv] = await pool.query('SELECT id FROM conversations WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
+app.get('/api/Conversation/:id/Message', auth, async (req, res) => {
+  const [conv] = await pool.query('SELECT id FROM Conversation WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
   if (conv.length === 0) return res.status(404).json({ error: 'Not found' });
 
   const [rows] = await pool.query(
-    'SELECT id, role, content, metadata, citations, createdAt FROM messages WHERE conversationId = ? ORDER BY createdAt ASC',
+    'SELECT id, role, content, metadata, citations, createdAt FROM Message WHERE conversationId = ? ORDER BY createdAt ASC',
     [req.params.id]
   );
   res.json(rows);
@@ -139,7 +139,7 @@ app.post('/api/chat', auth, async (req, res) => {
     let convId = conversationId;
     if (!convId) {
       const [result] = await pool.query(
-        'INSERT INTO conversations (userId, title) VALUES (?, ?)',
+        'INSERT INTO Conversation (userId, title) VALUES (?, ?)',
         [req.user.id, message.slice(0, 50)]
       );
       convId = result.insertId;
@@ -147,17 +147,17 @@ app.post('/api/chat', auth, async (req, res) => {
 
     // Save user message
     await pool.query(
-      'INSERT INTO messages (conversationId, role, content) VALUES (?, ?, ?)',
+      'INSERT INTO Message (conversationId, role, content) VALUES (?, ?, ?)',
       [convId, 'user', message]
     );
 
-    // Get sources for context
-    const [sources] = await pool.query(
-      'SELECT name, content FROM sources WHERE userId = ? LIMIT 5',
+    // Get Source for context
+    const [Source] = await pool.query(
+      'SELECT name, content FROM Source WHERE userId = ? LIMIT 5',
       [req.user.id]
     );
 
-    // Build messages for AI
+    // Build Message for AI
     const systemPrompt = `Kamu adalah Tara, asisten AI yang membantu pengguna Giantara ecosystem.
 
 IDENTITAS:
@@ -179,14 +179,14 @@ ATURAN:
     let contextMessages = [{ role: 'system', content: systemPrompt }];
 
     // Add source context if available
-    if (sources.length > 0) {
-      const sourceContext = sources.map(s => `[${s.name}]: ${s.content?.slice(0, 2000) || ''}`).join('\n\n');
+    if (Source.length > 0) {
+      const sourceContext = Source.map(s => `[${s.name}]: ${s.content?.slice(0, 2000) || ''}`).join('\n\n');
       contextMessages.push({ role: 'system', content: `Dokumen yang tersedia:\n${sourceContext}` });
     }
 
     // Get conversation history
     const [history] = await pool.query(
-      'SELECT role, content FROM messages WHERE conversationId = ? ORDER BY createdAt ASC LIMIT 20',
+      'SELECT role, content FROM Message WHERE conversationId = ? ORDER BY createdAt ASC LIMIT 20',
       [convId]
     );
     contextMessages.push(...history.map(m => ({ role: m.role, content: m.content })));
@@ -202,7 +202,7 @@ ATURAN:
       },
       body: JSON.stringify({
         model: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat-v4-0324',
-        messages: contextMessages,
+        Message: contextMessages,
         temperature: 0.7,
         max_tokens: 4096,
       }),
@@ -218,12 +218,12 @@ ATURAN:
 
     // Save AI message
     await pool.query(
-      'INSERT INTO messages (conversationId, role, content) VALUES (?, ?, ?)',
+      'INSERT INTO Message (conversationId, role, content) VALUES (?, ?, ?)',
       [convId, 'assistant', reply]
     );
 
     // Update conversation timestamp
-    await pool.query('UPDATE conversations SET updatedAt = NOW() WHERE id = ?', [convId]);
+    await pool.query('UPDATE Conversation SET updatedAt = NOW() WHERE id = ?', [convId]);
 
     res.json({ conversationId: convId, content: reply });
   } catch (err) {
@@ -233,15 +233,15 @@ ATURAN:
 
 // ============ SOURCES ROUTES ============
 
-app.get('/api/sources', auth, async (req, res) => {
+app.get('/api/Source', auth, async (req, res) => {
   const [rows] = await pool.query(
-    'SELECT id, name, format, wordCount, status, createdAt FROM sources WHERE userId = ? ORDER BY createdAt DESC',
+    'SELECT id, name, format, wordCount, status, createdAt FROM Source WHERE userId = ? ORDER BY createdAt DESC',
     [req.user.id]
   );
   res.json(rows);
 });
 
-app.post('/api/sources', auth, upload.single('file'), async (req, res) => {
+app.post('/api/Source', auth, upload.single('file'), async (req, res) => {
   try {
     let name, format, content;
 
@@ -261,7 +261,7 @@ app.post('/api/sources', auth, upload.single('file'), async (req, res) => {
     const wordCount = content.split(/\s+/).length;
 
     const [result] = await pool.query(
-      'INSERT INTO sources (userId, name, format, content, wordCount, status) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO Source (userId, name, format, content, wordCount, status) VALUES (?, ?, ?, ?, ?, ?)',
       [req.user.id, name, format, content, wordCount, 'ready']
     );
 
@@ -271,8 +271,8 @@ app.post('/api/sources', auth, upload.single('file'), async (req, res) => {
   }
 });
 
-app.delete('/api/sources/:id', auth, async (req, res) => {
-  await pool.query('DELETE FROM sources WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
+app.delete('/api/Source/:id', auth, async (req, res) => {
+  await pool.query('DELETE FROM Source WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
   res.json({ ok: true });
 });
 
