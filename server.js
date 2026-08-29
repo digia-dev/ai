@@ -60,6 +60,14 @@ async function runMigrations() {
       "updatedAt" TIMESTAMP DEFAULT NOW(),
       UNIQUE("userId", key)
     )`);
+    await client.query(`CREATE TABLE IF NOT EXISTS "ConversationBranch" (
+      id SERIAL PRIMARY KEY,
+      "conversationId" INTEGER REFERENCES "Conversation"(id) ON DELETE CASCADE,
+      "parentId" INTEGER,
+      "branchName" VARCHAR(100) DEFAULT 'main',
+      "createdAt" TIMESTAMP DEFAULT NOW()
+    )`);
+    await client.query('ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "branchId" INTEGER DEFAULT 1');
     console.log('Migrations completed');
   } catch (err) {
     console.error('Migration error:', err.message);
@@ -625,6 +633,69 @@ app.put('/api/conversations/:convId/messages/:msgId', auth, async (req, res) => 
     );
 
     res.json({ message: msg.rows[0], deletedCount: deletedMsgs.rowCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ CONVERSATION BRANCHES ============
+
+app.get('/api/conversations/:id/branches', auth, async (req, res) => {
+  try {
+    const conv = await pool.query(
+      'SELECT id FROM "Conversation" WHERE id = $1 AND "userId" = $2',
+      [req.params.id, req.user.id]
+    );
+    if (conv.rows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
+
+    const branches = await pool.query(
+      'SELECT id, "branchName", "createdAt" FROM "ConversationBranch" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC',
+      [req.params.id]
+    );
+    res.json(branches.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/conversations/:id/branches', auth, async (req, res) => {
+  try {
+    const { branchName, parentId } = req.body;
+    const conv = await pool.query(
+      'SELECT id FROM "Conversation" WHERE id = $1 AND "userId" = $2',
+      [req.params.id, req.user.id]
+    );
+    if (conv.rows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
+
+    const maxBranch = await pool.query(
+      'SELECT MAX(id) as maxId FROM "ConversationBranch" WHERE "conversationId" = $1',
+      [req.params.id]
+    );
+    const nextId = (maxBranch.rows[0]?.maxId || 0) + 1;
+
+    const result = await pool.query(
+      'INSERT INTO "ConversationBranch" ("conversationId", "parentId", "branchName") VALUES ($1, $2, $3) RETURNING *',
+      [req.params.id, parentId || null, branchName || `Branch ${nextId}`]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/conversations/:id/messages/:branchId', auth, async (req, res) => {
+  try {
+    const conv = await pool.query(
+      'SELECT id FROM "Conversation" WHERE id = $1 AND "userId" = $2',
+      [req.params.id, req.user.id]
+    );
+    if (conv.rows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
+
+    const messages = await pool.query(
+      'SELECT id, role, content, citations, "createdAt" FROM "Message" WHERE "conversationId" = $1 AND "branchId" = $2 ORDER BY "createdAt" ASC',
+      [req.params.id, req.params.branchId]
+    );
+    res.json(messages.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

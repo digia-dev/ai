@@ -10,6 +10,8 @@ import RelatedQuestions from '../components/RelatedQuestions';
 import FocusModeSelector from '../components/FocusModeSelector';
 import ChatInput from '../components/ChatInput';
 import ArtifactPanel from '../components/ArtifactPanel';
+import ExportMenu from '../components/ExportMenu';
+import BranchSelector from '../components/BranchSelector';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
 import { Sparkles, Square, Code } from 'lucide-react';
@@ -24,6 +26,7 @@ export default function Chat() {
   const {
     messages, loading, streamingContent, isStreaming, focusMode, setFocusMode, messagesEndRef,
     loadConversations, sendMessage, stopGeneration, currentConvId, regenerateMessage, editMessage,
+    branches, currentBranchId, loadBranches, switchBranch, createBranch,
   } = useChat();
   const [input, setInput] = useState('');
   const [clarification, setClarification] = useState<Clarification | null>(null);
@@ -53,6 +56,10 @@ export default function Chat() {
     }
   }, [artifacts.length]);
 
+  useEffect(() => {
+    if (currentConvId) loadBranches(currentConvId);
+  }, [currentConvId, loadBranches]);
+
   const handleSend = async (text?: string) => {
     const msg = text || input.trim();
     if (!msg || loading) return;
@@ -77,6 +84,20 @@ export default function Chat() {
 
   const handleArtifactClick = () => {
     setShowArtifactPanel(true);
+  };
+
+  const handleSwitchBranch = async (branchId: number) => {
+    if (!currentConvId) return;
+    await switchBranch(currentConvId, branchId);
+  };
+
+  const handleCreateBranch = async (name: string) => {
+    if (!currentConvId) return;
+    const branch = await createBranch(currentConvId, name);
+    if (branch) {
+      await switchBranch(currentConvId, branch.id);
+      toast.success(`Branch "${name}" dibuat`);
+    }
   };
 
   const handleUpload = async (files: FileList) => {
@@ -104,7 +125,15 @@ export default function Chat() {
   return (
     <>
       <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <span className="text-sm font-semibold dark:text-white">{chatTitle}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold dark:text-white">{chatTitle}</span>
+          <BranchSelector
+            branches={branches}
+            currentBranchId={currentBranchId}
+            onSwitchBranch={handleSwitchBranch}
+            onCreateBranch={handleCreateBranch}
+          />
+        </div>
         <div className="flex items-center gap-2">
           <FocusModeSelector value={focusMode} onChange={setFocusMode} />
           {artifacts.length > 0 && (
@@ -117,6 +146,9 @@ export default function Chat() {
               <Code className="w-3 h-3" />
               Artifacts ({artifacts.length})
             </button>
+          )}
+          {messages.length > 0 && (
+            <ExportMenu messages={messages} title={chatTitle} />
           )}
           {isStreaming && (
             <button

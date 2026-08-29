@@ -32,6 +32,8 @@ export function useChat(options: UseChatOptions = {}) {
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [focusMode, setFocusMode] = useState<string>('general');
+  const [branches, setBranches] = useState<any[]>([]);
+  const [currentBranchId, setCurrentBranchId] = useState<number>(1);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -64,6 +66,8 @@ export function useChat(options: UseChatOptions = {}) {
   const newChat = useCallback(() => {
     setCurrentConvId(null);
     setMessages([]);
+    setBranches([]);
+    setCurrentBranchId(1);
     setError(null);
   }, []);
 
@@ -77,6 +81,42 @@ export function useChat(options: UseChatOptions = {}) {
       loadConversations();
     } catch {}
   }, [options.agentId, currentConvId, newChat, loadConversations]);
+
+  const loadBranches = useCallback(async (convId: number) => {
+    try {
+      if (options.agentId) return;
+      const res = await apiFetch(`/api/conversations/${convId}/branches`);
+      if (res.ok) {
+        const data = await res.json();
+        setBranches(data);
+      }
+    } catch {}
+  }, [options.agentId]);
+
+  const switchBranch = useCallback(async (convId: number, branchId: number) => {
+    try {
+      setCurrentBranchId(branchId);
+      const url = `/api/conversations/${convId}/messages/${branchId}`;
+      const res = await apiFetch(url);
+      if (res.ok) setMessages(await res.json());
+    } catch {}
+  }, []);
+
+  const createBranch = useCallback(async (convId: number, branchName: string, parentId?: number) => {
+    try {
+      if (options.agentId) return null;
+      const res = await apiFetch(`/api/conversations/${convId}/branches`, {
+        method: 'POST',
+        body: JSON.stringify({ branchName, parentId }),
+      });
+      if (res.ok) {
+        const branch = await res.json();
+        setBranches(prev => [...prev, branch]);
+        return branch;
+      }
+    } catch {}
+    return null;
+  }, [options.agentId]);
 
   const regenerateMessage = useCallback(async (conversationId: number) => {
     if (loading) return;
@@ -441,6 +481,11 @@ export function useChat(options: UseChatOptions = {}) {
     stopGeneration,
     regenerateMessage,
     editMessage,
+    branches,
+    currentBranchId,
+    loadBranches,
+    switchBranch,
+    createBranch,
     setCurrentConvId,
     setMessages,
   };

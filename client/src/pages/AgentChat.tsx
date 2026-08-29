@@ -11,6 +11,7 @@ import RelatedQuestions from '../components/RelatedQuestions';
 import FocusModeSelector from '../components/FocusModeSelector';
 import ChatInput from '../components/ChatInput';
 import ArtifactPanel from '../components/ArtifactPanel';
+import ExportMenu from '../components/ExportMenu';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
 import { ArrowLeft, Paperclip, Share2, Copy, Check, ExternalLink, Square, Code } from 'lucide-react';
@@ -158,6 +159,9 @@ export default function AgentChat() {
             </button>
           )}
         </div>
+        {messages.length > 0 && (
+          <ExportMenu messages={messages} title={agent.name} />
+        )}
         <button onClick={handleShare} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" title="Bagikan hasil">
           <Share2 className="w-3 h-3" /> Bagikan
         </button>
