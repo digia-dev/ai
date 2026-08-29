@@ -3,11 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
-import { useModels } from '../hooks/useModels';
 import MessageBubble from '../components/MessageBubble';
 import ChatInput from '../components/ChatInput';
 import { SkeletonChat } from '../components/Skeleton';
-import { ArrowLeft, Paperclip } from 'lucide-react';
+import { toast } from '../components/Toast';
+import { ArrowLeft, Paperclip, Share2, Copy, Check, ExternalLink } from 'lucide-react';
 
 interface Agent {
   id: number;
@@ -23,10 +23,12 @@ export default function AgentChat() {
   const navigate = useNavigate();
   const [agent, setAgent] = useState<Agent | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
-  const { currentModel, setCurrentModel, models } = useModels();
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [shareLink, setShareLink] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const {
-    messages, loading, messagesEndRef,
+    currentConvId, messages, loading, messagesEndRef,
     loadConversations, sendMessage,
   } = useChat({ agentId: agentId ? Number(agentId) : undefined });
 
@@ -42,10 +44,7 @@ export default function AgentChat() {
         .then(r => r.ok ? r.json() : [])
         .then((agents: Agent[]) => {
           const found = agents.find(a => a.id === Number(agentId));
-          if (found) {
-            setAgent(found);
-            setCurrentModel(found.model);
-          }
+          if (found) setAgent(found);
         })
         .finally(() => setInitialLoading(false));
     }
@@ -66,8 +65,35 @@ export default function AgentChat() {
     await sendMessage(msg);
   };
 
+  const handleShare = async () => {
+    if (!currentConvId) { toast.error('Mulai percakapan terlebih dahulu'); return; }
+    const res = await apiFetch('/api/shared', { method: 'POST', body: JSON.stringify({ conversationId: currentConvId, title: agent?.name }) });
+    if (res.ok) {
+      const data = await res.json();
+      const url = `${window.location.origin}/shared/${data.token}`;
+      setShareLink(url);
+      setShowShareMenu(true);
+    } else {
+      toast.error('Gagal membuat link');
+    }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(shareLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success('Link disalin!');
+  };
+
+  const shareWhatsApp = () => {
+    const text = `Hasil agent *${agent?.name}* dari Tara AI:\n${shareLink}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
   if (initialLoading) return <SkeletonChat />;
   if (!agent) return <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">Agent tidak ditemukan</div>;
+
+  const modelName = agent.model.split('/').pop() || agent.model;
 
   return (
     <>
@@ -76,15 +102,32 @@ export default function AgentChat() {
           <ArrowLeft className="w-4 h-4" />
         </button>
         <span className="text-lg">{agent.icon}</span>
-        <span className="text-sm font-semibold">{agent.name}</span>
-        <select
-          value={currentModel}
-          onChange={e => setCurrentModel(e.target.value)}
-          className="ml-2 text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none"
-        >
-          {models.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-        </select>
+        <div className="flex-1">
+          <span className="text-sm font-semibold">{agent.name}</span>
+          <span className="text-xs text-gray-400 ml-2">{modelName}</span>
+        </div>
+        <button onClick={handleShare} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 text-gray-600" title="Bagikan hasil">
+          <Share2 className="w-3 h-3" /> Bagikan
+        </button>
       </div>
+
+      {/* Share Menu Dropdown */}
+      {showShareMenu && shareLink && (
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+          <input readOnly value={shareLink} className="flex-1 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs outline-none" />
+          <button onClick={copyLink} className="flex items-center gap-1 px-3 py-1.5 bg-black text-white rounded-lg text-xs hover:bg-gray-800">
+            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied ? 'Tersalin' : 'Salin'}
+          </button>
+          <button onClick={shareWhatsApp} className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs hover:bg-green-600">
+            WhatsApp
+          </button>
+          <button onClick={() => { window.open(shareLink, '_blank'); }} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">
+            <ExternalLink className="w-3 h-3" /> Buka
+          </button>
+          <button onClick={() => setShowShareMenu(false)} className="text-gray-400 hover:text-black text-xs">✕</button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-5 py-5">
         {messages.length === 0 && (

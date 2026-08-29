@@ -22,6 +22,43 @@ const pool = new pg.Pool({
 app.use(cors({ origin: ['https://ai.giantara.web.id', 'http://localhost:5173'] }));
 app.use(express.json({ limit: '10mb' }));
 
+// ============ DB MIGRATIONS ============
+async function runMigrations() {
+  const client = await pool.connect();
+  try {
+    await client.query('ALTER TABLE "Agent" ADD COLUMN IF NOT EXISTS "isTemplate" BOOLEAN DEFAULT false');
+    await client.query(`CREATE TABLE IF NOT EXISTS "Tag" (
+      id SERIAL PRIMARY KEY,
+      "userId" INTEGER REFERENCES "User"(id) ON DELETE CASCADE,
+      name VARCHAR(50) NOT NULL,
+      color VARCHAR(7) DEFAULT '#6B7280',
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      UNIQUE("userId", name)
+    )`);
+    await client.query(`CREATE TABLE IF NOT EXISTS "AgentTag" (
+      "agentId" INTEGER REFERENCES "Agent"(id) ON DELETE CASCADE,
+      "tagId" INTEGER REFERENCES "Tag"(id) ON DELETE CASCADE,
+      PRIMARY KEY("agentId", "tagId")
+    )`);
+    await client.query(`CREATE TABLE IF NOT EXISTS "SharedLink" (
+      id SERIAL PRIMARY KEY,
+      "userId" INTEGER REFERENCES "User"(id) ON DELETE CASCADE,
+      "conversationId" INTEGER REFERENCES "AgentConversation"(id) ON DELETE CASCADE,
+      token VARCHAR(32) UNIQUE NOT NULL,
+      title VARCHAR(255),
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      "expiresAt" TIMESTAMP,
+      views INTEGER DEFAULT 0
+    )`);
+    console.log('Migrations completed');
+  } catch (err) {
+    console.error('Migration error:', err.message);
+  } finally {
+    client.release();
+  }
+}
+runMigrations();
+
 const distPath = path.join('/home/giantar1/ai', 'client', 'dist');
 const uploadsPath = path.join('/home/giantar1/ai', 'uploads');
 if (!fs.existsSync(uploadsPath)) fs.mkdirSync(uploadsPath, { recursive: true });
@@ -81,6 +118,7 @@ const DEFAULT_AGENTS = [
     model: 'deepseek/deepseek-v4-flash',
     temperature: 0.7,
     isDefault: true,
+    isTemplate: true,
     systemPrompt: `Kamu adalah Tara, AI Assistant yang dirancang untuk membantu pengguna menyelesaikan berbagai kebutuhan secara akurat, jelas, profesional, dan mudah dipahami.
 
 IDENTITAS:
@@ -140,6 +178,7 @@ Selalu berkomunikasi dengan sikap helpful, confident, transparent, dan professio
     model: 'openai/gpt-4o-mini',
     temperature: 0.3,
     isDefault: true,
+    isTemplate: true,
     systemPrompt: `You are Data Analyst, a reliable AI assistant for analyzing structured and semi-structured data. Your purpose is to help users understand datasets, identify meaningful patterns, summarize results, and turn findings into clear, actionable insights.
 
 You can analyze data provided as CSV, JSON, or plain text. Always base conclusions on the available data. Never invent values, trends, or statistics.
@@ -186,6 +225,7 @@ isi file di sini
     model: 'anthropic/claude-3-haiku',
     temperature: 0.8,
     isDefault: true,
+    isTemplate: true,
     systemPrompt: `Kamu adalah Content Writer profesional yang membantu pengguna membuat konten berkualitas, relevan, dan orisinal.
 
 KAPABILITAS:
@@ -225,6 +265,7 @@ isi file di sini
     model: 'qwen/qwen3-coder',
     temperature: 0.2,
     isDefault: true,
+    isTemplate: true,
     systemPrompt: `Kamu adalah Code Assistant expert yang membantu pengguna menulis, memahami, memperbaiki, dan mengoptimalkan kode secara praktis, akurat, dan mudah dipahami.
 
 KAPABILITAS:
@@ -285,8 +326,8 @@ app.post('/api/auth/register', async (req, res) => {
     // Create default agents
     for (const agent of DEFAULT_AGENTS) {
       await pool.query(
-        'INSERT INTO "Agent" ("userId", name, icon, "systemPrompt", model, temperature, "isDefault") VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [userId, agent.name, agent.icon, agent.systemPrompt, agent.model, agent.temperature, agent.isDefault]
+        'INSERT INTO "Agent" ("userId", name, icon, "systemPrompt", model, temperature, "isDefault", "isTemplate") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        [userId, agent.name, agent.icon, agent.systemPrompt, agent.model, agent.temperature, agent.isDefault, agent.isTemplate]
       );
     }
 
@@ -520,7 +561,13 @@ app.delete('/api/sources/:id', auth, async (req, res) => {
 app.get('/api/agents', auth, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, name, icon, model, temperature, "maxTokens", "isDefault", "systemPrompt" FROM "Agent" WHERE ("userId" = $1 OR "isDefault" = TRUE) AND "isActive" = TRUE ORDER BY "isDefault" DESC, name ASC',
+      `SELECT a.id, a.name, a.icon, a.model, a.temperature, a."maxTokens", a."isDefault", a."isTemplate", a."systemPrompt",
+       COALESCE(json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color)) FILTER (WHERE t.id IS NOT NULL), '[]') as tags
+       FROM "Agent" a
+       LEFT JOIN "AgentTag" at2 ON a.id = at2."agentId"
+       LEFT JOIN "Tag" t ON at2."tagId" = t.id
+       WHERE (a."userId" = $1 OR a."isDefault" = TRUE) AND a."isActive" = TRUE
+       GROUP BY a.id ORDER BY a."isDefault" DESC, a.name ASC`,
       [req.user.id]
     );
     res.json(result.rows);
@@ -803,6 +850,148 @@ app.delete('/api/agents/files/:id', auth, async (req, res) => {
     }
     await pool.query('DELETE FROM "AgentFile" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ AGENT CLONE (TEMPLATE SYSTEM) ============
+
+app.post('/api/agents/:id/clone', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'INSERT INTO "Agent" ("userId", name, icon, model, temperature, "maxTokens", "systemPrompt", "isTemplate") SELECT $1, name, icon, model, temperature, "maxTokens", "systemPrompt", FALSE FROM "Agent" WHERE id = $2 AND ("userId" = $3 OR "isDefault" = TRUE) AND "isActive" = TRUE RETURNING *',
+      [req.user.id, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Template not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ TAGS ============
+
+app.get('/api/tags', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT t.id, t.name, t.color, COUNT(at."agentId")::int as "agentCount" FROM "Tag" t LEFT JOIN "AgentTag" at ON t.id = at."tagId" WHERE t."userId" = $1 GROUP BY t.id ORDER BY t.name',
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/tags', auth, async (req, res) => {
+  try {
+    const { name, color } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+    const result = await pool.query(
+      'INSERT INTO "Tag" ("userId", name, color) VALUES ($1, $2, $3) ON CONFLICT ("userId", name) DO UPDATE SET color = $3 RETURNING *',
+      [req.user.id, name.trim(), color || '#6B7280']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/tags/:id', auth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM "Tag" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/agents/:id/tags', auth, async (req, res) => {
+  try {
+    const { tagIds } = req.body;
+    await pool.query('DELETE FROM "AgentTag" WHERE "agentId" = $1', [req.params.id]);
+    for (const tagId of tagIds) {
+      await pool.query('INSERT INTO "AgentTag" ("agentId", "tagId") VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.params.id, tagId]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ SHARED LINKS ============
+
+function generateToken() {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+
+app.post('/api/shared', auth, async (req, res) => {
+  try {
+    const { conversationId, title } = req.body;
+    if (!conversationId) return res.status(400).json({ error: 'Conversation ID required' });
+
+    const conv = await pool.query(
+      'SELECT id FROM "AgentConversation" WHERE id = $1 AND "userId" = $2',
+      [conversationId, req.user.id]
+    );
+    if (conv.rows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
+
+    const token = generateToken();
+    const result = await pool.query(
+      'INSERT INTO "SharedLink" ("userId", "conversationId", token, title) VALUES ($1, $2, $3, $4) RETURNING *',
+      [req.user.id, conversationId, token, title || 'Hasil Agent Tara AI']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/shared', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT sl.id, sl.token, sl.title, sl."createdAt", sl.views, sl."conversationId" FROM "SharedLink" sl WHERE sl."userId" = $1 ORDER BY sl."createdAt" DESC',
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/shared/:token', auth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM "SharedLink" WHERE token = $1 AND "userId" = $2', [req.params.token, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/shared/:token', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT sl.*, u.name as "authorName" FROM "SharedLink" sl JOIN "User" u ON sl."userId" = u.id WHERE sl.token = $1',
+      [req.params.token]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Link tidak ditemukan atau sudah dihapus' });
+
+    const link = result.rows[0];
+    await pool.query('UPDATE "SharedLink" SET views = views + 1 WHERE token = $1', [req.params.token]);
+
+    const messages = await pool.query(
+      'SELECT role, content, "outputFiles", "createdAt" FROM "AgentMessage" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC',
+      [link.conversationId]
+    );
+
+    res.json({
+      title: link.title,
+      authorName: link.authorName,
+      createdAt: link.createdAt,
+      views: link.views + 1,
+      messages: messages.rows,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

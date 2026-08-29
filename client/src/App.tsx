@@ -9,6 +9,7 @@ import Account from './pages/Account';
 import AccountBilling from './pages/AccountBilling';
 import AccountHistory from './pages/AccountHistory';
 import Collection from './pages/Collection';
+import SharedResult from './pages/SharedResult';
 import AppLayout from './components/AppLayout';
 import { ToastContainer } from './components/Toast';
 import { getCurrentUser } from './lib/auth';
@@ -36,6 +37,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Auth />} />
         <Route path="/register" element={<Auth />} />
+        <Route path="/shared/:token" element={<SharedResult />} />
         <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
         <Route path="/sources" element={<ProtectedRoute><Sources /></ProtectedRoute>} />
         <Route path="/agents" element={<ProtectedRoute><AgentManager /></ProtectedRoute>} />
