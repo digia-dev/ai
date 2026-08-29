@@ -161,7 +161,14 @@ const uploadsPath = path.join('/home/giantar1/ai', 'uploads');
 if (!fs.existsSync(uploadsPath)) fs.mkdirSync(uploadsPath, { recursive: true });
 const distExists = fs.existsSync(distPath);
 if (distExists) {
-  app.use(express.static(path.join(distPath), { index: 'index.html' }));
+  app.use(express.static(path.join(distPath), {
+    index: 'index.html',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      }
+    },
+  }));
 }
 
 const upload = multer({
@@ -2673,12 +2680,14 @@ app.get('/api/health', (req, res) => {
 
 if (fs.existsSync(distPath)) {
   app.get('/', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(distPath, 'index.html'));
   });
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api/')) {
       return res.status(404).json({ error: 'Not found' });
     }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }

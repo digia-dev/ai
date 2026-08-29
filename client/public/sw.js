@@ -1,17 +1,6 @@
-const CACHE_NAME = 'tara-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/chat',
-  '/agents',
-  '/manifest.json',
-];
+const CACHE_NAME = 'tara-v2';
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
@@ -30,30 +19,39 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  
+
   if (request.method !== 'GET') return;
   try {
     const url = new URL(request.url);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
   } catch { return; }
   if (request.url.includes('/api/')) return;
-  
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      
-      return fetch(request).then((response) => {
-        if (!response || response.status !== 200) {
+
+  const isHTML = request.headers.get('Accept')?.includes('text/html');
+
+  if (isHTML) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
           return response;
-        }
-        
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(request, responseToCache);
-        });
-        
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(request).then((response) => {
+        if (!response || response.status !== 200) return response;
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         return response;
       });
     })

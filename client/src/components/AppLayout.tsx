@@ -99,12 +99,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="md:hidden fixed top-3 left-3 z-30 p-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        <div className="md:hidden flex items-center gap-3 px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <span className="text-sm font-semibold dark:text-white">Tara AI</span>
+        </div>
 
         {children}
       </div>
