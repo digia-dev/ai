@@ -12,6 +12,7 @@ import Collection from './pages/Collection';
 import SharedResult from './pages/SharedResult';
 import AdminDashboard from './pages/AdminDashboard';
 import AppLayout from './components/AppLayout';
+import ErrorBoundary from './components/ErrorBoundary';
 import { ToastContainer } from './components/Toast';
 import { getCurrentUser } from './lib/auth';
 
@@ -35,21 +36,23 @@ export default function App() {
   return (
     <BrowserRouter>
       <ToastContainer />
-      <Routes>
-        <Route path="/login" element={<Auth />} />
-        <Route path="/register" element={<Auth />} />
-        <Route path="/shared/:token" element={<SharedResult />} />
-        <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-        <Route path="/sources" element={<ProtectedRoute><Sources /></ProtectedRoute>} />
-        <Route path="/agents" element={<ProtectedRoute><AgentManager /></ProtectedRoute>} />
-        <Route path="/agents/:agentId" element={<ProtectedRoute><AgentChat /></ProtectedRoute>} />
-        <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
-        <Route path="/account/billing" element={<ProtectedRoute><AccountBilling /></ProtectedRoute>} />
-        <Route path="/account/history" element={<ProtectedRoute><AccountHistory /></ProtectedRoute>} />
-        <Route path="/collection" element={<ProtectedRoute><Collection /></ProtectedRoute>} />
-        <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-        <Route path="*" element={<Navigate to="/chat" replace />} />
-      </Routes>
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/login" element={<Auth />} />
+          <Route path="/register" element={<Auth />} />
+          <Route path="/shared/:token" element={<SharedResult />} />
+          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+          <Route path="/sources" element={<ProtectedRoute><Sources /></ProtectedRoute>} />
+          <Route path="/agents" element={<ProtectedRoute><AgentManager /></ProtectedRoute>} />
+          <Route path="/agents/:agentId" element={<ProtectedRoute><AgentChat /></ProtectedRoute>} />
+          <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+          <Route path="/account/billing" element={<ProtectedRoute><AccountBilling /></ProtectedRoute>} />
+          <Route path="/account/history" element={<ProtectedRoute><AccountHistory /></ProtectedRoute>} />
+          <Route path="/collection" element={<ProtectedRoute><Collection /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+          <Route path="*" element={<Navigate to="/chat" replace />} />
+        </Routes>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

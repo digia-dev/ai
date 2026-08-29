@@ -50,15 +50,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.get('/api/debug-env', (req, res) => {
-  res.json({
-    hasApiKey: !!process.env.OPENROUTER_API_KEY,
-    apiKeyPrefix: process.env.OPENROUTER_API_KEY ? process.env.OPENROUTER_API_KEY.substring(0, 12) + '...' : 'none',
-    hasJwtSecret: !!process.env.JWT_SECRET,
-    hasDbHost: !!process.env.DB_HOST
-  });
-});
-
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, name, password } = req.body;

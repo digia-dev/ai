@@ -10,17 +10,56 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'tara-ai-jwt-secret-2026-secure-change-in-production';
+
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is required');
+  process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!process.env.DB_PASS) {
+  console.error('FATAL: DB_PASS environment variable is required');
+  process.exit(1);
+}
 
 const pool = new pg.Pool({
   user: process.env.DB_USER || 'giantar1_tara',
-  password: process.env.DB_PASS || 'TaraAI2026Secure!',
+  password: process.env.DB_PASS,
   database: process.env.DB_NAME || 'giantar1_tara_ai',
   host: process.env.DB_HOST || '/var/run/postgresql',
 });
 
 app.use(cors({ origin: ['https://ai.giantara.web.id', 'http://localhost:5173'] }));
 app.use(express.json({ limit: '10mb' }));
+
+// ============ RATE LIMITING ============
+const rateLimitStore = new Map();
+function rateLimit(maxRequests = 60, windowMs = 60000) {
+  return (req, res, next) => {
+    const key = req.user?.id || req.ip;
+    const now = Date.now();
+    const record = rateLimitStore.get(key);
+    
+    if (!record || now - record.start > windowMs) {
+      rateLimitStore.set(key, { start: now, count: 1 });
+      return next();
+    }
+    
+    record.count++;
+    if (record.count > maxRequests) {
+      return res.status(429).json({ error: 'Terlalu banyak request. Coba lagi nanti.' });
+    }
+    next();
+  };
+}
+
+// Cleanup old entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimitStore) {
+    if (now - record.start > 120000) rateLimitStore.delete(key);
+  }
+}, 300000);
 
 // ============ DB MIGRATIONS ============
 async function runMigrations() {
@@ -94,6 +133,20 @@ async function runMigrations() {
     await client.query('ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "branchId" INTEGER DEFAULT 1');
     await client.query('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isAdmin" BOOLEAN DEFAULT false');
     await client.query('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "banned" BOOLEAN DEFAULT false');
+
+    // Performance indexes
+    await client.query('CREATE INDEX IF NOT EXISTS idx_conversation_user ON "Conversation"("userId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_conversation_updated ON "Conversation"("updatedAt" DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_message_conv ON "Message"("conversationId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_message_conv_created ON "Message"("conversationId", "createdAt")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_agentmessage_conv ON "AgentMessage"("conversationId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_agentconv_user ON "AgentConversation"("userId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_agentconv_agent ON "AgentConversation"("agentId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_tokenledger_user ON "TokenLedger"("userId", "createdAt" DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_userbilling_user ON "UserBilling"("userId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_source_user ON "Source"("userId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_payment_order ON "PaymentTransaction"("orderId")');
+
     console.log('Migrations completed');
   } catch (err) {
     console.error('Migration error:', err.message);
@@ -110,10 +163,6 @@ const distExists = fs.existsSync(distPath);
 if (distExists) {
   app.use(express.static(path.join(distPath), { index: 'index.html' }));
 }
-
-app.get('/api/debug', (req, res) => {
-  res.json({ distExists, files: fs.existsSync(distPath) ? fs.readdirSync(distPath) : [], distPath });
-});
 
 const upload = multer({
   dest: path.join('/home/giantar1/ai', 'uploads'),
@@ -571,7 +620,7 @@ KUALITAS KODE:
 
 // ============ AUTH ============
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', rateLimit(5, 300000), async (req, res) => {
   try {
     const { email, name, password } = req.body;
     if (!email || !name || !password) return res.status(400).json({ error: 'All fields required' });
@@ -606,7 +655,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', rateLimit(10, 300000), async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await pool.query('SELECT * FROM "User" WHERE email = $1', [email]);
@@ -995,12 +1044,34 @@ app.post('/api/generate-image', auth, async (req, res) => {
   }
 });
 
-// ============ CODE EXECUTION ============
+// ============ CODE EXECUTION (SANDBOXED) ============
+
+const BLOCKED_PATTERNS = [
+  /require\s*\(\s*['"]child_process['"]\s*\)/,
+  /require\s*\(\s*['"]fs['"]\s*\)/,
+  /require\s*\(\s*['"]path['"]\s*\)/,
+  /require\s*\(\s*['"]net['"]\s*\)/,
+  /require\s*\(\s*['"]http['"]\s*\)/,
+  /require\s*\(\s*['"]https['"]\s*\)/,
+  /require\s*\(\s*['"]os['"]\s*\)/,
+  /process\.\w+/,
+  /__import__/,
+  /subprocess/,
+  /os\.(system|popen)/,
+  /exec\s*\(/,
+  /eval\s*\(/,
+];
 
 app.post('/api/execute-code', auth, async (req, res) => {
   try {
     const { code, language = 'javascript' } = req.body;
     if (!code) return res.status(400).json({ error: 'Code required' });
+    if (code.length > 5000) return res.status(400).json({ error: 'Code maksimal 5000 karakter' });
+
+    const hasBlocked = BLOCKED_PATTERNS.some(p => p.test(code));
+    if (hasBlocked) {
+      return res.status(400).json({ error: 'Kode mengandung operasi yang tidak diizinkan' });
+    }
 
     const { execSync } = require('child_process');
     const tmpFile = path.join('/tmp', `code-${Date.now()}.${language === 'python' ? 'py' : 'js'}`);
@@ -1011,9 +1082,9 @@ app.post('/api/execute-code', auth, async (req, res) => {
       fs.writeFileSync(tmpFile, code);
 
       if (language === 'python') {
-        output = execSync(`python3 ${tmpFile} 2>&1`, { timeout: 10000, encoding: 'utf-8' });
+        output = execSync(`python3 ${tmpFile} 2>&1`, { timeout: 10000, encoding: 'utf-8', env: {} });
       } else if (language === 'javascript') {
-        output = execSync(`node ${tmpFile} 2>&1`, { timeout: 10000, encoding: 'utf-8' });
+        output = execSync(`node ${tmpFile} 2>&1`, { timeout: 10000, encoding: 'utf-8', env: {} });
       } else {
         return res.status(400).json({ error: 'Hanya JavaScript dan Python yang didukung' });
       }
@@ -1023,9 +1094,9 @@ app.post('/api/execute-code', auth, async (req, res) => {
       try { fs.unlinkSync(tmpFile); } catch {}
     }
 
-    res.json({ output: output || '', error });
+    res.json({ output: (output || '').slice(0, 5000), error: (error || '').slice(0, 2000) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Execution failed' });
   }
 });
 
@@ -1124,6 +1195,10 @@ app.post('/api/analyze-image', auth, async (req, res) => {
 
 app.get('/api/conversations/:id/comments', auth, async (req, res) => {
   try {
+    const convCheck = await pool.query('SELECT "userId" FROM "Conversation" WHERE id = $1', [req.params.id]);
+    if (convCheck.rows.length === 0 || convCheck.rows[0].userId !== req.user.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
     const comments = await pool.query(
       `SELECT c.id, c.content, c."createdAt", u.name as "userName"
        FROM "ConversationComment" c
@@ -1142,6 +1217,11 @@ app.post('/api/conversations/:id/comments', auth, async (req, res) => {
   try {
     const { content } = req.body;
     if (!content) return res.status(400).json({ error: 'Content required' });
+
+    const convCheck = await pool.query('SELECT "userId" FROM "Conversation" WHERE id = $1', [req.params.id]);
+    if (convCheck.rows.length === 0 || convCheck.rows[0].userId !== req.user.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
 
     const result = await pool.query(
       'INSERT INTO "ConversationComment" ("conversationId", "userId", content) VALUES ($1, $2, $3) RETURNING *',
@@ -1483,7 +1563,7 @@ ATURAN:
 
 // ============ CHAT STREAMING (SSE) ============
 
-app.post('/api/chat/stream', auth, async (req, res) => {
+app.post('/api/chat/stream', auth, rateLimit(30, 60000), async (req, res) => {
   try {
     const { conversationId, message, focusMode, regenerate } = req.body;
 
@@ -1658,7 +1738,7 @@ ATURAN:
   }
 });
 
-app.post('/api/agents/chat/stream', auth, async (req, res) => {
+app.post('/api/agents/chat/stream', auth, rateLimit(30, 60000), async (req, res) => {
   try {
     const { agentId, conversationId, message, focusMode, regenerate } = req.body;
 
@@ -1799,7 +1879,7 @@ app.post('/api/agents/chat/stream', auth, async (req, res) => {
     }
 
     const files = await extractAndSaveFiles(fullContent, req.user.id, agentId, convId);
-    const tokensUsed = 0;
+    const tokensUsed = Math.ceil(fullContent.length / 4);
 
     await pool.query(
       'INSERT INTO "AgentMessage" ("conversationId", role, content, "outputFiles", "tokensUsed", citations) VALUES ($1, $2, $3, $4, $5, $6)',
@@ -1989,6 +2069,10 @@ app.delete('/api/agents/conversations/:id', auth, async (req, res) => {
 
 app.get('/api/agents/conversations/:id/messages', auth, async (req, res) => {
   try {
+    const convCheck = await pool.query('SELECT "userId" FROM "AgentConversation" WHERE id = $1', [req.params.id]);
+    if (convCheck.rows.length === 0 || convCheck.rows[0].userId !== req.user.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
     const result = await pool.query(
       'SELECT id, role, content, "outputFiles", "tokensUsed", "createdAt" FROM "AgentMessage" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC',
       [req.params.id]
@@ -2244,6 +2328,10 @@ app.delete('/api/tags/:id', auth, async (req, res) => {
 app.post('/api/agents/:id/tags', auth, async (req, res) => {
   try {
     const { tagIds } = req.body;
+    const agentCheck = await pool.query('SELECT "userId" FROM "Agent" WHERE id = $1', [req.params.id]);
+    if (agentCheck.rows.length === 0 || agentCheck.rows[0].userId !== req.user.id) {
+      return res.status(404).json({ error: 'Not found' });
+    }
     await pool.query('DELETE FROM "AgentTag" WHERE "agentId" = $1', [req.params.id]);
     for (const tagId of tagIds) {
       await pool.query('INSERT INTO "AgentTag" ("agentId", "tagId") VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.params.id, tagId]);
@@ -2256,8 +2344,9 @@ app.post('/api/agents/:id/tags', auth, async (req, res) => {
 
 // ============ SHARED LINKS ============
 
+const crypto = require('crypto');
 function generateToken() {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  return crypto.randomBytes(24).toString('hex');
 }
 
 app.post('/api/shared', auth, async (req, res) => {
@@ -2435,26 +2524,30 @@ app.post('/api/payments/create', auth, async (req, res) => {
       return res.json({ orderId, paymentUrl: transaction.redirect_url, token: transaction.token });
     }
 
-    // Fallback: direct token grant (for testing)
-    await pool.query('UPDATE "PaymentTransaction" SET status = $1 WHERE "orderId" = $2', ['paid', orderId]);
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
-      const newBalance = (bal.rows[0]?.tokenBalance || 0) + pkg.tokens + pkg.bonus;
-      await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
-      await client.query(
-        'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
-        [req.user.id, 'purchase', pkg.tokens + pkg.bonus, newBalance, `Top-up: ${pkg.name} (${pkg.tokens + pkg.bonus} token)`]
-      );
-      await client.query('COMMIT');
-    } catch (e) {
-      await client.query('ROLLBACK');
-    } finally {
-      client.release();
-    }
+    // Fallback: direct token grant (for testing) - DISABLED in production
+    if (process.env.NODE_ENV === 'development') {
+      await pool.query('UPDATE "PaymentTransaction" SET status = $1 WHERE "orderId" = $2 AND status != $3', ['paid', orderId, 'paid']);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
+        const newBalance = (bal.rows[0]?.tokenBalance || 0) + pkg.tokens + pkg.bonus;
+        await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
+        await client.query(
+          'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+          [req.user.id, 'purchase', pkg.tokens + pkg.bonus, newBalance, `Top-up: ${pkg.name} (${pkg.tokens + pkg.bonus} token)`]
+        );
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+      } finally {
+        client.release();
+      }
 
-    res.json({ orderId, status: 'paid', tokenBalance: (await pool.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1', [req.user.id])).rows[0].tokenBalance });
+      res.json({ orderId, status: 'paid', tokenBalance: (await pool.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1', [req.user.id])).rows[0].tokenBalance });
+    } else {
+      res.status(400).json({ error: 'Payment not configured' });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2466,8 +2559,8 @@ app.post('/api/payments/callback', async (req, res) => {
 
     if (transaction_status === 'capture' && fraud_status === 'accept') {
       const payment = await pool.query(
-        'UPDATE "PaymentTransaction" SET status = $1, "providerResponse" = $2, "updatedAt" = NOW() WHERE "orderId" = $3 RETURNING *',
-        ['paid', req.body, order_id]
+        'UPDATE "PaymentTransaction" SET status = $1, "providerResponse" = $2, "updatedAt" = NOW() WHERE "orderId" = $3 AND status != $4 RETURNING *',
+        ['paid', req.body, order_id, 'paid']
       );
 
       if (payment.rows[0]) {
@@ -2492,7 +2585,7 @@ app.post('/api/payments/callback', async (req, res) => {
 
     res.status(200).json({ status: 'ok' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Callback processing failed' });
   }
 });
 
