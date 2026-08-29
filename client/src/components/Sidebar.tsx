@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { formatTokens } from '../lib/constants';
@@ -18,6 +18,7 @@ import {
   LogOut,
   ChevronDown,
   ChevronRight,
+  Search,
 } from 'lucide-react';
 
 interface Conversation {
@@ -59,11 +60,44 @@ export default function Sidebar({
     agents: true,
     account: false,
   });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Conversation[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     apiFetch('/api/agents').then(r => r.ok ? r.json() : []).then(setAgents).catch(() => {});
     apiFetch('/api/account/billing').then(r => r.ok ? r.json() : null).then(d => { if (d) setTokenBalance(d.tokenBalance); }).catch(() => {});
   }, []);
+
+  const handleSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const res = await apiFetch(`/api/conversations/search?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(data);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery) {
+        handleSearch(searchQuery);
+      } else {
+        setSearchResults([]);
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, handleSearch]);
 
   const toggleSection = (key: string) => {
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -84,6 +118,8 @@ export default function Sidebar({
       <span>{label}</span>
     </div>
   );
+
+  const displayConversations = isSearching ? searchResults : conversations;
 
   return (
     <div className="w-[280px] bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full shrink-0">
@@ -107,12 +143,32 @@ export default function Sidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Cari chat..."
+            className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-black dark:text-white placeholder-gray-400 outline-none focus:border-black dark:focus:border-blue-500"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchQuery(''); setSearchResults([]); setIsSearching(false); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+
         {/* Chat */}
         {navItem('/chat', <MessageSquare className="w-4 h-4" />, 'Chat', () => { onNewChat(); navigate('/chat'); })}
 
-        {conversations.length > 0 && currentPath === '/chat' && (
+        {displayConversations.length > 0 && currentPath === '/chat' && (
           <div className="ml-4 space-y-0.5 mb-2">
-            {conversations.map((c) => (
+            {displayConversations.map((c) => (
               <div
                 key={c.id}
                 onClick={() => onSelectConversation?.(c.id, c.title)}
@@ -121,12 +177,14 @@ export default function Sidebar({
                 }`}
               >
                 <span className="flex-1 truncate dark:text-gray-300">{c.title || 'Chat Baru'}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDeleteConversation?.(c.id); }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-black dark:hover:text-white ml-2"
-                >
-                  <X className="w-3 h-3" />
-                </button>
+                {!isSearching && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDeleteConversation?.(c.id); }}
+                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-black dark:hover:text-white ml-2"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
               </div>
             ))}
           </div>

@@ -50,6 +50,16 @@ async function runMigrations() {
       "expiresAt" TIMESTAMP,
       views INTEGER DEFAULT 0
     )`);
+    await client.query(`CREATE TABLE IF NOT EXISTS "UserMemory" (
+      id SERIAL PRIMARY KEY,
+      "userId" INTEGER REFERENCES "User"(id) ON DELETE CASCADE,
+      key VARCHAR(100) NOT NULL,
+      value TEXT NOT NULL,
+      "sourceConversationId" INTEGER,
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW(),
+      UNIQUE("userId", key)
+    )`);
     console.log('Migrations completed');
   } catch (err) {
     console.error('Migration error:', err.message);
@@ -541,6 +551,180 @@ app.get('/api/conversations/:id/messages', auth, async (req, res) => {
   }
 });
 
+// ============ CONVERSATION SEARCH ============
+
+app.get('/api/conversations/search', auth, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length === 0) return res.json([]);
+
+    const searchQuery = `%${q}%`;
+    const result = await pool.query(
+      `SELECT DISTINCT c.id, c.title, c."createdAt", c."updatedAt",
+       ts_rank_cd(to_tsvector('simple', c.title), plainto_tsquery('simple', $2)) as rank
+       FROM "Conversation" c
+       LEFT JOIN "Message" m ON c.id = m."conversationId"
+       WHERE c."userId" = $1
+       AND (c.title ILIKE $2 OR m.content ILIKE $2)
+       ORDER BY rank DESC, c."updatedAt" DESC
+       LIMIT 20`,
+      [req.user.id, searchQuery]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ MESSAGE REGENERATION ============
+
+app.post('/api/conversations/:id/regenerate', auth, async (req, res) => {
+  try {
+    const conv = await pool.query('SELECT id FROM "Conversation" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    if (conv.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+
+    const lastMsg = await pool.query(
+      'SELECT id FROM "Message" WHERE "conversationId" = $1 AND role = \'assistant\' ORDER BY "createdAt" DESC LIMIT 1',
+      [req.params.id]
+    );
+    if (lastMsg.rows.length === 0) return res.status(404).json({ error: 'No assistant message to regenerate' });
+
+    await pool.query('DELETE FROM "Message" WHERE id = $1', [lastMsg.rows[0].id]);
+
+    const lastUserMsg = await pool.query(
+      'SELECT content FROM "Message" WHERE "conversationId" = $1 AND role = \'user\' ORDER BY "createdAt" DESC LIMIT 1',
+      [req.params.id]
+    );
+    if (lastUserMsg.rows.length === 0) return res.status(404).json({ error: 'No user message found' });
+
+    res.json({ conversationId: parseInt(req.params.id), regenerateFrom: lastUserMsg.rows[0].content });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ MESSAGE EDITING ============
+
+app.put('/api/conversations/:convId/messages/:msgId', auth, async (req, res) => {
+  try {
+    const conv = await pool.query('SELECT id FROM "Conversation" WHERE id = $1 AND "userId" = $2', [req.params.convId, req.user.id]);
+    if (conv.rows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
+
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ error: 'Content required' });
+
+    const msg = await pool.query(
+      'UPDATE "Message" SET content = $1 WHERE id = $2 AND "conversationId" = $3 AND role = \'user\' RETURNING id, content',
+      [content, req.params.msgId, req.params.convId]
+    );
+    if (msg.rows.length === 0) return res.status(404).json({ error: 'Message not found or not editable' });
+
+    const deletedMsgs = await pool.query(
+      'DELETE FROM "Message" WHERE "conversationId" = $1 AND "createdAt" > (SELECT "createdAt" FROM "Message" WHERE id = $2) RETURNING id',
+      [req.params.convId, req.params.msgId]
+    );
+
+    res.json({ message: msg.rows[0], deletedCount: deletedMsgs.rowCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ USER MEMORY ============
+
+app.get('/api/memory', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, key, value, "createdAt" FROM "UserMemory" WHERE "userId" = $1 ORDER BY "updatedAt" DESC',
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/memory', auth, async (req, res) => {
+  try {
+    const { key, value } = req.body;
+    if (!key || !value) return res.status(400).json({ error: 'Key and value required' });
+    const result = await pool.query(
+      'INSERT INTO "UserMemory" ("userId", key, value) VALUES ($1, $2, $3) ON CONFLICT ("userId", key) DO UPDATE SET value = $3, "updatedAt" = NOW() RETURNING *',
+      [req.user.id, key.trim(), value.trim()]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/memory/:id', auth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM "UserMemory" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+async function getUserMemory(userId) {
+  try {
+    const result = await pool.query(
+      'SELECT key, value FROM "UserMemory" WHERE "userId" = $1 ORDER BY "updatedAt" DESC LIMIT 20',
+      [userId]
+    );
+    if (result.rows.length === 0) return '';
+    return 'Informasi tentang pengguna:\n' + result.rows.map(m => `- ${m.key}: ${m.value}`).join('\n');
+  } catch {
+    return '';
+  }
+}
+
+async function extractMemories(userId, message, aiResponse, conversationId) {
+  try {
+    const res = await fetch(process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.APP_URL || 'https://ai.giantara.web.id',
+        'X-Title': 'Tara AI',
+      },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-v4-flash',
+        messages: [
+          {
+            role: 'system',
+            content: `Extract key facts about the user from this conversation. Return ONLY a JSON array of objects with "key" and "value" fields. Examples: [{"key": "nama", "value": "Budi"}, {"key": "pekerjaan", "value": "Software Engineer"}]. Return empty array [] if no memorable facts found.`
+          },
+          {
+            role: 'user',
+            content: `User: ${message}\nAI: ${aiResponse.slice(0, 500)}`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 200,
+      }),
+    });
+
+    if (!res.ok) return;
+    const data = await res.json();
+    const content = data.choices[0]?.message?.content || '[]';
+    const match = content.match(/\[[\s\S]*\]/);
+    if (match) {
+      const memories = JSON.parse(match[0]);
+      for (const m of memories) {
+        if (m.key && m.value) {
+          await pool.query(
+            'INSERT INTO "UserMemory" ("userId", key, value, "sourceConversationId") VALUES ($1, $2, $3, $4) ON CONFLICT ("userId", key) DO UPDATE SET value = $3, "updatedAt" = NOW()',
+            [userId, m.key, m.value, conversationId]
+          );
+        }
+      }
+    }
+  } catch {}
+}
+
 // ============ CHAT ============
 
 app.post('/api/chat', auth, async (req, res) => {
@@ -638,22 +822,44 @@ ATURAN:
 
 app.post('/api/chat/stream', auth, async (req, res) => {
   try {
-    const { conversationId, message, focusMode } = req.body;
-    if (!message) return res.status(400).json({ error: 'Message required' });
+    const { conversationId, message, focusMode, regenerate } = req.body;
 
     let convId = conversationId;
+    let actualMessage = message;
+
+    if (regenerate && convId) {
+      const lastAssistant = await pool.query(
+        'SELECT id FROM "Message" WHERE "conversationId" = $1 AND role = $2 ORDER BY "createdAt" DESC LIMIT 1',
+        [convId, 'assistant']
+      );
+      if (lastAssistant.rows.length > 0) {
+        await pool.query('DELETE FROM "Message" WHERE id = $1', [lastAssistant.rows[0].id]);
+      }
+      const lastUserMsg = await pool.query(
+        'SELECT content FROM "Message" WHERE "conversationId" = $1 AND role = $2 ORDER BY "createdAt" DESC LIMIT 1',
+        [convId, 'user']
+      );
+      if (lastUserMsg.rows.length > 0) {
+        actualMessage = lastUserMsg.rows[0].content;
+      }
+    }
+
+    if (!actualMessage) return res.status(400).json({ error: 'Message required' });
+
     if (!convId) {
       const result = await pool.query(
         'INSERT INTO "Conversation" ("userId", title) VALUES ($1, $2) RETURNING id',
-        [req.user.id, message.slice(0, 50)]
+        [req.user.id, actualMessage.slice(0, 50)]
       );
       convId = result.rows[0].id;
     }
 
-    await pool.query(
-      'INSERT INTO "Message" ("conversationId", role, content) VALUES ($1, $2, $3)',
-      [convId, 'user', message]
-    );
+    if (!regenerate) {
+      await pool.query(
+        'INSERT INTO "Message" ("conversationId", role, content) VALUES ($1, $2, $3)',
+        [convId, 'user', actualMessage]
+      );
+    }
 
     const sources = await pool.query(
       'SELECT name, content FROM "Source" WHERE "userId" = $1 LIMIT 5',
@@ -661,7 +867,7 @@ app.post('/api/chat/stream', auth, async (req, res) => {
     );
 
     // Web search
-    const searchResult = await tavilySearch(message, focusMode);
+    const searchResult = await tavilySearch(actualMessage, focusMode);
     const searchContext = buildSearchContext(searchResult);
     const citations = extractCitations(searchResult);
 
@@ -684,6 +890,12 @@ ATURAN:
 - Jangan pernah mengarang informasi`;
 
     const contextMessages = [{ role: 'system', content: systemPrompt }];
+
+    // Inject user memory
+    const userMemory = await getUserMemory(req.user.id);
+    if (userMemory) {
+      contextMessages.push({ role: 'system', content: userMemory });
+    }
 
     if (searchContext) {
       contextMessages.push({ role: 'system', content: `Hasil pencarian web:\n${searchContext}` });
@@ -768,7 +980,10 @@ ATURAN:
     );
     await pool.query('UPDATE "Conversation" SET "updatedAt" = NOW() WHERE id = $1', [convId]);
 
-    const relatedQuestions = await generateRelatedQuestions(message, fullContent, searchResult);
+    const relatedQuestions = await generateRelatedQuestions(actualMessage, fullContent, searchResult);
+
+    // Extract memories in background
+    extractMemories(req.user.id, actualMessage, fullContent, convId).catch(() => {});
 
     res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files, citations, relatedQuestions })}\n\n`);
     res.end();
@@ -782,8 +997,7 @@ ATURAN:
 
 app.post('/api/agents/chat/stream', auth, async (req, res) => {
   try {
-    const { agentId, conversationId, message, focusMode } = req.body;
-    if (!message || !agentId) return res.status(400).json({ error: 'Agent ID and message required' });
+    const { agentId, conversationId, message, focusMode, regenerate } = req.body;
 
     const billing = await pool.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1', [req.user.id]);
     if (!billing.rows[0] || billing.rows[0].tokenBalance <= 0) {
@@ -799,17 +1013,39 @@ app.post('/api/agents/chat/stream', auth, async (req, res) => {
     const agentConfig = agent.rows[0];
 
     let convId = conversationId;
+    let actualMessage = message;
+
+    if (regenerate && convId) {
+      const lastAssistant = await pool.query(
+        'SELECT id FROM "AgentMessage" WHERE "conversationId" = $1 AND role = $2 ORDER BY "createdAt" DESC LIMIT 1',
+        [convId, 'assistant']
+      );
+      if (lastAssistant.rows.length > 0) {
+        await pool.query('DELETE FROM "AgentMessage" WHERE id = $1', [lastAssistant.rows[0].id]);
+      }
+      const lastUserMsg = await pool.query(
+        'SELECT content FROM "AgentMessage" WHERE "conversationId" = $1 AND role = $2 ORDER BY "createdAt" DESC LIMIT 1',
+        [convId, 'user']
+      );
+      if (lastUserMsg.rows.length > 0) {
+        actualMessage = lastUserMsg.rows[0].content;
+      }
+    }
+
+    if (!actualMessage || !agentId) return res.status(400).json({ error: 'Agent ID and message required' });
+
     if (!convId) {
       const conv = await pool.query(
         'INSERT INTO "AgentConversation" ("agentId", "userId", title) VALUES ($1, $2, $3) RETURNING id',
-        [agentId, req.user.id, message.slice(0, 50)]
+        [agentId, req.user.id, actualMessage.slice(0, 50)]
       );
       convId = conv.rows[0].id;
     }
 
-    await pool.query(
+    if (!regenerate) {
+      await pool.query(
       'INSERT INTO "AgentMessage" ("conversationId", role, content) VALUES ($1, $2, $3)',
-      [convId, 'user', message]
+      [convId, 'user', actualMessage]
     );
 
     const history = await pool.query(
@@ -818,7 +1054,7 @@ app.post('/api/agents/chat/stream', auth, async (req, res) => {
     );
 
     // Web search
-    const searchResult = await tavilySearch(message, focusMode);
+    const searchResult = await tavilySearch(actualMessage, focusMode);
     const searchContext = buildSearchContext(searchResult);
     const citations = extractCitations(searchResult);
 
@@ -826,12 +1062,18 @@ app.post('/api/agents/chat/stream', auth, async (req, res) => {
       { role: 'system', content: agentConfig.systemPrompt },
     ];
 
+    // Inject user memory
+    const userMemory = await getUserMemory(req.user.id);
+    if (userMemory) {
+      messages.push({ role: 'system', content: userMemory });
+    }
+
     if (searchContext) {
       messages.push({ role: 'system', content: `Hasil pencarian web:\n${searchContext}\n\nGunakan nomor referensi [1], [2], [3] untuk sumber web yang digunakan.` });
     }
 
     messages.push(...history.rows);
-    messages.push({ role: 'user', content: message });
+    messages.push({ role: 'user', content: actualMessage });
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -921,7 +1163,12 @@ app.post('/api/agents/chat/stream', auth, async (req, res) => {
       }
     }
 
-    res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files })}\n\n`);
+    const relatedQuestions = await generateRelatedQuestions(actualMessage, fullContent, searchResult);
+
+    // Extract memories in background
+    extractMemories(req.user.id, actualMessage, fullContent, convId).catch(() => {});
+
+    res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files, citations, relatedQuestions })}\n\n`);
     res.end();
   } catch (err) {
     try {

@@ -78,6 +78,214 @@ export function useChat(options: UseChatOptions = {}) {
     } catch {}
   }, [options.agentId, currentConvId, newChat, loadConversations]);
 
+  const regenerateMessage = useCallback(async (conversationId: number) => {
+    if (loading) return;
+    setLoading(true);
+    setIsStreaming(true);
+    setStreamingContent('');
+
+    const assistantMsgId = Date.now() + 1;
+
+    setMessages(prev => [...prev, {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      outputFiles: [],
+      tokensUsed: 0,
+      citations: [],
+      relatedQuestions: [],
+      createdAt: new Date().toISOString(),
+    }]);
+
+    try {
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      const url = options.agentId ? '/api/agents/chat/stream' : '/api/chat/stream';
+      const body = options.agentId
+        ? { agentId: options.agentId, conversationId, message: '' }
+        : { conversationId, message: '' };
+
+      const res = await apiFetchStream(url, {
+        method: 'POST',
+        body: JSON.stringify({ ...body, regenerate: true }),
+        signal: abortController.signal,
+      });
+
+      if (!res.ok) throw new Error('Gagal regenerate');
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulated = '';
+      let finalCitations: Citation[] = [];
+      let finalRelatedQuestions: string[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          if (trimmed.startsWith('data: ')) {
+            const data = trimmed.slice(6);
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.chunk) {
+                accumulated += parsed.chunk;
+                setStreamingContent(accumulated);
+              }
+              if (parsed.conversationId) {
+                finalCitations = parsed.citations || [];
+                finalRelatedQuestions = parsed.relatedQuestions || [];
+                setMessages(prev => prev.map(m =>
+                  m.id === assistantMsgId
+                    ? { ...m, content: accumulated, outputFiles: parsed.files || [], citations: finalCitations, relatedQuestions: finalRelatedQuestions }
+                    : m
+                ));
+              }
+            } catch {}
+          }
+        }
+      }
+
+      setMessages(prev => prev.map(m =>
+        m.id === assistantMsgId
+          ? { ...m, content: accumulated, citations: finalCitations, relatedQuestions: finalRelatedQuestions }
+          : m
+      ));
+
+      loadConversations();
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setMessages(prev => prev.filter(m => m.id !== assistantMsgId));
+      } else {
+        setError(err.message);
+        setMessages(prev => prev.map(m =>
+          m.id === assistantMsgId
+            ? { ...m, content: `Maaf, terjadi kesalahan: ${err.message}` }
+            : m
+        ));
+      }
+    } finally {
+      setLoading(false);
+      setIsStreaming(false);
+      setStreamingContent('');
+      abortControllerRef.current = null;
+    }
+  }, [options.agentId, loading, loadConversations]);
+
+  const editMessage = useCallback(async (conversationId: number, msgId: number, newContent: string) => {
+    if (!currentConvId) return;
+
+    try {
+      const url = `/api/conversations/${conversationId}/messages/${msgId}`;
+      const res = await apiFetch(url, {
+        method: 'PUT',
+        body: JSON.stringify({ content: newContent }),
+      });
+      if (res.ok) {
+        setMessages(prev => {
+          const idx = prev.findIndex(m => m.id === msgId);
+          if (idx === -1) return prev;
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], content: newContent };
+          return updated.slice(0, idx + 1);
+        });
+        setLoading(true);
+        setIsStreaming(true);
+        setStreamingContent('');
+
+        const assistantMsgId = Date.now() + 1;
+
+        setMessages(prev => [...prev, {
+          id: assistantMsgId,
+          role: 'assistant',
+          content: '',
+          outputFiles: [],
+          tokensUsed: 0,
+          citations: [],
+          relatedQuestions: [],
+          createdAt: new Date().toISOString(),
+        }]);
+
+        const streamUrl = options.agentId ? '/api/agents/chat/stream' : '/api/chat/stream';
+        const body = options.agentId
+          ? { agentId: options.agentId, conversationId, message: '' }
+          : { conversationId, message: '' };
+
+        const streamRes = await apiFetchStream(streamUrl, {
+          method: 'POST',
+          body: JSON.stringify({ ...body, message: newContent }),
+        });
+
+        if (!streamRes.ok) throw new Error('Gagal regenerate setelah edit');
+
+        const reader = streamRes.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let accumulated = '';
+        let finalCitations: Citation[] = [];
+        let finalRelatedQuestions: string[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            if (trimmed.startsWith('data: ')) {
+              const data = trimmed.slice(6);
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.chunk) {
+                  accumulated += parsed.chunk;
+                  setStreamingContent(accumulated);
+                }
+                if (parsed.conversationId) {
+                  finalCitations = parsed.citations || [];
+                  finalRelatedQuestions = parsed.relatedQuestions || [];
+                  setMessages(prev => prev.map(m =>
+                    m.id === assistantMsgId
+                      ? { ...m, content: accumulated, outputFiles: parsed.files || [], citations: finalCitations, relatedQuestions: finalRelatedQuestions }
+                      : m
+                  ));
+                }
+              } catch {}
+            }
+          }
+        }
+
+        setMessages(prev => prev.map(m =>
+          m.id === assistantMsgId
+            ? { ...m, content: accumulated, citations: finalCitations, relatedQuestions: finalRelatedQuestions }
+            : m
+        ));
+
+        loadConversations();
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+      setIsStreaming(false);
+      setStreamingContent('');
+      abortControllerRef.current = null;
+    }
+  }, [currentConvId, options.agentId, loadConversations]);
+
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -231,6 +439,8 @@ export function useChat(options: UseChatOptions = {}) {
     deleteConversation,
     sendMessage,
     stopGeneration,
+    regenerateMessage,
+    editMessage,
     setCurrentConvId,
     setMessages,
   };

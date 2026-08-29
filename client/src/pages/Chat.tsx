@@ -21,13 +21,14 @@ interface Clarification {
 export default function Chat() {
   const {
     messages, loading, streamingContent, isStreaming, focusMode, setFocusMode, messagesEndRef,
-    loadConversations, sendMessage, stopGeneration,
+    loadConversations, sendMessage, stopGeneration, currentConvId, regenerateMessage, editMessage,
   } = useChat();
   const [input, setInput] = useState('');
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [chatTitle, setChatTitle] = useState('Chat Baru');
   const [uploading, setUploading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
 
   const { isRecording, toggle: toggleVoice } = useVoice({
     onResult: (transcript) => setInput(prev => prev + transcript),
@@ -48,6 +49,19 @@ export default function Chat() {
     setClarification(null);
     setChatTitle(msg.slice(0, 50));
     await sendMessage(msg);
+  };
+
+  const handleRegenerate = async () => {
+    if (!currentConvId || loading) return;
+    setChatTitle('Regenerasi...');
+    await regenerateMessage(currentConvId);
+  };
+
+  const handleEdit = async (msgId: number, newContent: string) => {
+    if (!currentConvId || loading) return;
+    setEditingMsgId(null);
+    setChatTitle('Edit & regenerate...');
+    await editMessage(currentConvId, msgId, newContent);
   };
 
   const handleUpload = async (files: FileList) => {
@@ -112,16 +126,29 @@ export default function Chat() {
           </div>
         )}
 
-        {messages.map((m) => {
+        {messages.map((m, idx) => {
           if (m.role === 'assistant' && isStreaming && m.content === '' && streamingContent) {
             return <StreamingBubble key={m.id} content={streamingContent} />;
           }
           if (m.role === 'assistant' && isStreaming && m.id === messages[messages.length - 1]?.id && streamingContent) {
             return <StreamingBubble key={m.id} content={streamingContent} />;
           }
+
+          const isLastAssistant = m.role === 'assistant' && idx === messages.length - 1;
+          const isUserMsg = m.role === 'user';
+
           return (
             <div key={m.id}>
-              <MessageBubble role={m.role} content={m.content} createdAt={m.createdAt} />
+              <MessageBubble
+                role={m.role}
+                content={m.content}
+                createdAt={m.createdAt}
+                isLast={isLastAssistant}
+                onRegenerate={isLastAssistant ? handleRegenerate : undefined}
+                onEdit={isUserMsg ? (newContent) => handleEdit(m.id, newContent) : undefined}
+                isEditing={editingMsgId === m.id}
+                onCancelEdit={() => setEditingMsgId(null)}
+              />
               {m.citations && m.citations.length > 0 && (
                 <CitationsCard citations={m.citations} />
               )}

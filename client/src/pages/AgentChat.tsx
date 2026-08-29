@@ -33,10 +33,11 @@ export default function AgentChat() {
 
   const {
     currentConvId, messages, loading, streamingContent, isStreaming, focusMode, setFocusMode, messagesEndRef,
-    loadConversations, sendMessage, stopGeneration,
+    loadConversations, sendMessage, stopGeneration, regenerateMessage, editMessage,
   } = useChat({ agentId: agentId ? Number(agentId) : undefined });
 
   const [input, setInput] = useState('');
+  const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
 
   const { isRecording, toggle: toggleVoice } = useVoice({
     onResult: (transcript) => setInput(prev => prev + transcript),
@@ -67,6 +68,17 @@ export default function AgentChat() {
     if (!msg || loading || !agentId) return;
     setInput('');
     await sendMessage(msg);
+  };
+
+  const handleRegenerate = async () => {
+    if (!currentConvId || loading) return;
+    await regenerateMessage(currentConvId);
+  };
+
+  const handleEdit = async (msgId: number, newContent: string) => {
+    if (!currentConvId || loading) return;
+    setEditingMsgId(null);
+    await editMessage(currentConvId, msgId, newContent);
   };
 
   const handleShare = async () => {
@@ -151,7 +163,7 @@ export default function AgentChat() {
           </div>
         )}
 
-        {messages.map(m => {
+        {messages.map((m, idx) => {
           if (m.role === 'assistant' && isStreaming && m.content === '' && streamingContent) {
             return (
               <div key={m.id}>
@@ -176,9 +188,22 @@ export default function AgentChat() {
               </div>
             );
           }
+
+          const isLastAssistant = m.role === 'assistant' && idx === messages.length - 1;
+          const isUserMsg = m.role === 'user';
+
           return (
             <div key={m.id}>
-              <MessageBubble role={m.role} content={m.content} createdAt={m.createdAt} />
+              <MessageBubble
+                role={m.role}
+                content={m.content}
+                createdAt={m.createdAt}
+                isLast={isLastAssistant}
+                onRegenerate={isLastAssistant ? handleRegenerate : undefined}
+                onEdit={isUserMsg ? (newContent) => handleEdit(m.id, newContent) : undefined}
+                isEditing={editingMsgId === m.id}
+                onCancelEdit={() => setEditingMsgId(null)}
+              />
               {m.citations && m.citations.length > 0 && (
                 <CitationsCard citations={m.citations} />
               )}

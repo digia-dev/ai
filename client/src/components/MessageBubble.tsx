@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, RotateCw, Pencil } from 'lucide-react';
 
 interface MessageBubbleProps {
   role: string;
   content: string;
   createdAt?: string;
+  isLast?: boolean;
+  onRegenerate?: () => void;
+  onEdit?: (newContent: string) => void;
+  isEditing?: boolean;
+  onCancelEdit?: () => void;
 }
 
 function CodeBlock({ children, className, ...props }: any) {
@@ -47,14 +52,31 @@ function CodeBlock({ children, className, ...props }: any) {
   );
 }
 
-export default function MessageBubble({ role, content, createdAt }: MessageBubbleProps) {
+export default function MessageBubble({
+  role,
+  content,
+  createdAt,
+  isLast = false,
+  onRegenerate,
+  onEdit,
+  isEditing = false,
+  onCancelEdit,
+}: MessageBubbleProps) {
   const isUser = role === 'user';
   const [copied, setCopied] = useState(false);
+  const [editContent, setEditContent] = useState(content);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveEdit = () => {
+    if (editContent.trim() && editContent !== content) {
+      onEdit?.(editContent);
+    }
+    onCancelEdit?.();
   };
 
   return (
@@ -72,7 +94,32 @@ export default function MessageBubble({ role, content, createdAt }: MessageBubbl
             : 'prose prose-sm dark:prose-invert prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:bg-gray-100 dark:prose-pre:bg-gray-800 prose-pre:p-3 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-code:text-sm prose-code:bg-gray-100 dark:prose-code:bg-gray-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-normal prose-strong:font-semibold prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-a:underline prose-table:border-collapse prose-th:border prose-th:border-gray-200 dark:prose-th:border-gray-600 prose-th:px-3 prose-th:py-1.5 prose-th:text-left prose-td:border prose-td:border-gray-200 dark:prose-td:border-gray-600 prose-td:px-3 prose-td:py-1.5'
         }`}>
           {isUser ? (
-            <span className="whitespace-pre-wrap">{content}</span>
+            isEditing ? (
+              <div className="space-y-2">
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm outline-none resize-none min-h-[60px] dark:text-white"
+                  autoFocus
+                />
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={onCancelEdit}
+                    className="px-3 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    className="px-3 py-1 text-xs bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"
+                  >
+                    Simpan
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <span className="whitespace-pre-wrap">{content}</span>
+            )
           ) : (
             <ReactMarkdown
               rehypePlugins={[rehypeHighlight]}
@@ -100,6 +147,27 @@ export default function MessageBubble({ role, content, createdAt }: MessageBubbl
           >
             {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
+          {isUser && !isEditing && onEdit && (
+            <button
+              onClick={() => {
+                setEditContent(content);
+                onEdit(content);
+              }}
+              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-black transition-opacity"
+              title="Edit"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
+          {!isUser && isLast && onRegenerate && (
+            <button
+              onClick={onRegenerate}
+              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-black transition-opacity"
+              title="Regenerate"
+            >
+              <RotateCw className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </div>
     </div>
