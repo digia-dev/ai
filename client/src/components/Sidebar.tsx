@@ -5,23 +5,23 @@ import { formatTokens } from '../lib/constants';
 import ThemeToggle from './ThemeToggle';
 import Logo from './Logo';
 import { getAgentIcon } from '../lib/agentIcons';
+import { isAuthenticated } from '../lib/auth';
 import {
   Plus,
   MessageSquare,
   X,
   Bot,
   Folder,
-  User,
   UserCircle,
   CreditCard,
   BarChart3,
   FileText,
   Zap,
   LogOut,
-  ChevronDown,
-  ChevronRight,
   Search,
   Shield,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 
 interface Conversation {
@@ -62,7 +62,6 @@ export default function Sidebar({
   const [isAdmin, setIsAdmin] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     agents: true,
-    account: false,
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Conversation[]>([]);
@@ -241,43 +240,40 @@ export default function Sidebar({
 
         <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
 
-        {/* Account */}
-        <div
-          className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-black dark:hover:text-white transition-colors"
-          onClick={() => toggleSection('account')}
-        >
-          <User className="w-4 h-4" />
-          <span className="flex-1">Akun</span>
-          {expandedSections.account ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-        </div>
-        {expandedSections.account && (
-          <div className="ml-4 space-y-0.5">
-            {navItem('/account', <UserCircle className="w-4 h-4" />, 'Profil')}
-            {navItem('/account/billing', <CreditCard className="w-4 h-4" />, 'Token & Pembayaran')}
-            {navItem('/account/history', <BarChart3 className="w-4 h-4" />, 'Riwayat Penggunaan')}
-            <div
-              onClick={onLogout}
-              className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Keluar</span>
-            </div>
-            {isAdmin && (
-              <div
-                onClick={() => navigate('/admin')}
-                className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              >
-                <Shield className="w-4 h-4" />
-                <span>Admin</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
-
         {/* Sources */}
         {navItem('/sources', <FileText className="w-4 h-4" />, 'Sumber')}
+      </div>
+
+      {/* Account — bottom area */}
+      <div className="p-2 border-t border-gray-200 dark:border-gray-700 space-y-0.5">
+        {navItem('/account', <UserCircle className="w-4 h-4" />, 'Profil')}
+        {navItem('/account/billing', <CreditCard className="w-4 h-4" />, 'Token & Pembayaran')}
+        {navItem('/account/history', <BarChart3 className="w-4 h-4" />, 'Riwayat Penggunaan')}
+        {isAdmin && navItem('/admin', <Shield className="w-4 h-4" />, 'Admin')}
+        <div
+          onClick={onLogout}
+          className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Keluar</span>
+        </div>
+
+        {!isAuthenticated() && (
+          <div className="pt-2 border-t border-gray-200 dark:border-gray-700 mt-2 space-y-1">
+            <div
+              onClick={() => navigate('/login')}
+              className="flex items-center justify-center gap-2 px-3 py-2 text-sm cursor-pointer rounded-lg bg-black text-white hover:bg-gray-800 transition-colors"
+            >
+              <span>Masuk</span>
+            </div>
+            <div
+              onClick={() => navigate('/register')}
+              className="flex items-center justify-center gap-2 px-3 py-2 text-sm cursor-pointer rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <span>Daftar</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Token Balance */}

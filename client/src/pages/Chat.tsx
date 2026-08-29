@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -23,10 +24,12 @@ interface Clarification {
 }
 
 export default function Chat() {
+  const [searchParams] = useSearchParams();
   const {
     messages, loading, streamingContent, isStreaming, messagesEndRef,
     loadConversations, sendMessage, stopGeneration, currentConvId, regenerateMessage, editMessage,
     branches, currentBranchId, loadBranches, switchBranch, createBranch,
+    selectConversation, newChat,
   } = useChat();
   const { t } = useTranslation();
   const [input, setInput] = useState('');
@@ -59,6 +62,15 @@ export default function Chat() {
   useEffect(() => {
     loadConversations().finally(() => setInitialLoading(false));
   }, []);
+
+  useEffect(() => {
+    const convId = searchParams.get('conversationId');
+    if (convId) {
+      selectConversation(Number(convId));
+    } else if (currentConvId) {
+      newChat();
+    }
+  }, [searchParams, selectConversation, newChat]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

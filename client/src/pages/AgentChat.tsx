@@ -1,30 +1,19 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
-import { useArtifacts } from '../hooks/useArtifacts';
-import { useTranslation } from '../hooks/useTranslation';
 import { useTTS } from '../hooks/useTTS';
 import MessageBubble from '../components/MessageBubble';
 import StreamingBubble from '../components/StreamingBubble';
 import CitationsCard from '../components/CitationsCard';
 import RelatedQuestions from '../components/RelatedQuestions';
-import FocusModeSelector from '../components/FocusModeSelector';
-import ChatInput from '../components/ChatInput';
-import ArtifactPanel from '../components/ArtifactPanel';
-import ExportMenu from '../components/ExportMenu';
 import SummaryCard from '../components/SummaryCard';
-import PromptTemplates from '../components/PromptTemplates';
-import ImageGenerator from '../components/ImageGenerator';
-import CodeRunner from '../components/CodeRunner';
-import ImageInput from '../components/ImageInput';
-import ConversationComments from '../components/ConversationComments';
-import LanguageToggle from '../components/LanguageToggle';
+import ChatInput from '../components/ChatInput';
 import { SkeletonChat } from '../components/Skeleton';
-import { toast } from '../components/Toast';
-import { ArrowLeft, Paperclip, Share2, Copy, Check, ExternalLink, Square, Code } from 'lucide-react';
+import { ArrowLeft, Square } from 'lucide-react';
 import { getAgentIcon } from '../lib/agentIcons';
+import { isAuthenticated } from '../lib/auth';
 
 interface Agent {
   id: number;
@@ -38,25 +27,20 @@ interface Agent {
 export default function AgentChat() {
   const { agentId } = useParams();
   const navigate = useNavigate();
-  const { locale, toggleLocale, t } = useTranslation();
+  const location = useLocation();
   const [agent, setAgent] = useState<Agent | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [showShareMenu, setShowShareMenu] = useState(false);
-  const [shareLink, setShareLink] = useState('');
-  const [copied, setCopied] = useState(false);
 
   const {
-    currentConvId, messages, loading, streamingContent, isStreaming, focusMode, setFocusMode, messagesEndRef,
+    currentConvId, messages, loading, streamingContent, isStreaming, messagesEndRef,
     loadConversations, sendMessage, stopGeneration, regenerateMessage, editMessage,
+    selectConversation,
   } = useChat({ agentId: agentId ? Number(agentId) : undefined });
 
   const [input, setInput] = useState('');
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
-  const [showArtifactPanel, setShowArtifactPanel] = useState(false);
 
-  const { artifacts, activeArtifactId, selectArtifact, closeArtifact } = useArtifacts(messages);
   const { isSpeaking, speak, stop: stopSpeak } = useTTS();
-
   const { isRecording, toggle: toggleVoice } = useVoice({
     onResult: (transcript) => setInput(prev => prev + transcript),
   });
@@ -75,17 +59,19 @@ export default function AgentChat() {
 
   useEffect(() => {
     if (agentId) loadConversations();
-  }, [agentId]);
+  }, [agentId, loadConversations]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
   useEffect(() => {
-    if (artifacts.length > 0 && !showArtifactPanel) {
-      setShowArtifactPanel(true);
+    const params = new URLSearchParams(location.search);
+    const convId = params.get('conversationId');
+    if (convId && agentId) {
+      selectConversation(Number(convId));
     }
-  }, [artifacts.length]);
+  }, [location.search, agentId, selectConversation]);
 
   const handleSend = async (text?: string) => {
     const msg = text || input.trim();
@@ -105,62 +91,25 @@ export default function AgentChat() {
     await editMessage(currentConvId, msgId, newContent);
   };
 
-  const handleArtifactClick = () => {
-    setShowArtifactPanel(true);
-  };
-
-  const handleShare = async () => {
-    if (!currentConvId) { toast.error('Mulai percakapan terlebih dahulu'); return; }
-    const res = await apiFetch('/api/shared', { method: 'POST', body: JSON.stringify({ conversationId: currentConvId, title: agent?.name }) });
-    if (res.ok) {
-      const data = await res.json();
-      const url = `${window.location.origin}/shared/${data.token}`;
-      setShareLink(url);
-      setShowShareMenu(true);
-    } else {
-      toast.error('Gagal membuat link');
-    }
-  };
-
-  const copyLink = () => {
-    navigator.clipboard.writeText(shareLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast.success('Link disalin!');
-  };
-
-  const shareWhatsApp = () => {
-    const text = `Hasil agent *${agent?.name}* dari Tara AI:\n${shareLink}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-  };
+  const authenticated = isAuthenticated();
+  const modelName = agent?.model.split('/').pop() || agent?.model;
 
   if (initialLoading) return <SkeletonChat />;
   if (!agent) return <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">Agent tidak ditemukan</div>;
 
-  const modelName = agent.model.split('/').pop() || agent.model;
-
   return (
-    <>
-      <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
-        <button onClick={() => navigate('/agents')} className="text-gray-400 hover:text-black dark:hover:text-white">
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        {getAgentIcon(agent.icon, 'w-5 h-5')}
-        <div className="flex-1 flex items-center gap-2">
-          <span className="text-sm font-semibold dark:text-white">{agent.name}</span>
-          <span className="text-xs text-gray-400">{modelName}</span>
-          <FocusModeSelector value={focusMode} onChange={setFocusMode} />
-          {artifacts.length > 0 && (
-            <button
-              onClick={() => setShowArtifactPanel(!showArtifactPanel)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                showArtifactPanel ? 'bg-black dark:bg-white text-white dark:text-black' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              <Code className="w-3 h-3" />
-              Artifacts ({artifacts.length})
-            </button>
-          )}
+    <div className="flex flex-col h-full">
+      {/* HEADER */}
+      <div className="h-14 px-5 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <button onClick={() => navigate('/agents')} className="text-gray-400 hover:text-black dark:hover:text-white shrink-0">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          {getAgentIcon(agent.icon, 'w-5 h-5')}
+          <span className="text-sm font-semibold dark:text-white truncate">{agent.name}</span>
+          <span className="text-xs text-gray-400 hidden sm:inline">{modelName}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           {isStreaming && (
             <button
               onClick={stopGeneration}
@@ -171,144 +120,90 @@ export default function AgentChat() {
             </button>
           )}
         </div>
-        {messages.length > 0 && (
-          <ExportMenu messages={messages} title={agent.name} />
-        )}
-        <LanguageToggle locale={locale} onToggle={toggleLocale} />
-        <button onClick={handleShare} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" title={t('agent.share')}>
-          <Share2 className="w-3 h-3" /> Bagikan
-        </button>
       </div>
 
-      {showShareMenu && shareLink && (
-        <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center gap-2">
-          <input readOnly value={shareLink} className="flex-1 px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs outline-none dark:text-white" />
-          <button onClick={copyLink} className="flex items-center gap-1 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-lg text-xs hover:bg-gray-800 dark:hover:bg-gray-200">
-            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            {copied ? 'Tersalin' : 'Salin'}
-          </button>
-          <button onClick={shareWhatsApp} className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs hover:bg-green-600">
-            WhatsApp
-          </button>
-          <button onClick={() => { window.open(shareLink, '_blank'); }} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300">
-            <ExternalLink className="w-3 h-3" /> Buka
-          </button>
-          <button onClick={() => setShowShareMenu(false)} className="text-gray-400 hover:text-black dark:hover:text-white text-xs">✕</button>
-        </div>
-      )}
-
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-5 py-5">
-            {messages.length === 0 && (
-              <div className="text-center py-20 max-w-md mx-auto">
-                <div className="mb-4">{getAgentIcon(agent.icon, 'w-10 h-10')}</div>
-                <h2 className="text-xl font-bold mb-2 dark:text-white">{agent.name}</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Mulai percakapan dengan {agent.name}</p>
+      {/* MESSAGES */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-5 py-5">
+          {messages.length === 0 && (
+            <div className="text-center py-20">
+              <div className="mb-4">{getAgentIcon(agent.icon, 'w-10 h-10 mx-auto')}</div>
+              <h2 className="text-xl font-bold mb-2 dark:text-white">{agent.name}</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Mulai percakapan dengan {agent.name}</p>
+              <div className="max-w-xl mx-auto">
+                <ChatInput
+                  input={input}
+                  setInput={setInput}
+                  onSend={handleSend}
+                  onVoice={toggleVoice}
+                  isRecording={isRecording}
+                  loading={loading}
+                  showUpload={authenticated}
+                  showVoice={authenticated}
+                  placeholder={`Tanya ${agent.name}...`}
+                />
               </div>
-            )}
+            </div>
+          )}
 
-            {messages.length > 5 && currentConvId && (
-              <SummaryCard conversationId={currentConvId} />
-            )}
+          {messages.length > 5 && currentConvId && (
+            <SummaryCard conversationId={currentConvId} />
+          )}
 
-            {messages.map((m, idx) => {
-              if (m.role === 'assistant' && isStreaming && m.content === '' && streamingContent) {
-                return (
-                  <div key={m.id}>
-                    <StreamingBubble content={streamingContent} />
-                  </div>
-                );
-              }
-              if (m.role === 'assistant' && isStreaming && m.id === messages[messages.length - 1]?.id && streamingContent) {
-                return (
-                  <div key={m.id}>
-                    <StreamingBubble content={streamingContent} />
-                    {m.outputFiles && m.outputFiles.length > 0 && (
-                      <div className="flex gap-2 flex-wrap mb-4 pl-11">
-                        {m.outputFiles.map((f: any, i: number) => (
-                          <a key={i} href={f.downloadUrl} className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors dark:text-gray-300">
-                            <Paperclip className="w-3 h-3" /> {f.name}
-                            <span className="text-gray-400">({(f.size / 1024).toFixed(1)} KB)</span>
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
+          {messages.map((m, idx) => {
+            if (m.role === 'assistant' && isStreaming && m.content === '' && streamingContent) {
+              return <StreamingBubble key={m.id} content={streamingContent} />;
+            }
+            if (m.role === 'assistant' && isStreaming && m.id === messages[messages.length - 1]?.id && streamingContent) {
+              return <StreamingBubble key={m.id} content={streamingContent} />;
+            }
 
-              const isLastAssistant = m.role === 'assistant' && idx === messages.length - 1;
-              const isUserMsg = m.role === 'user';
+            const isLastAssistant = m.role === 'assistant' && idx === messages.length - 1;
+            const isUserMsg = m.role === 'user';
 
-              return (
-                <div key={m.id}>
-                  <MessageBubble
-                    role={m.role}
-                    content={m.content}
-                    createdAt={m.createdAt}
-                    isLast={isLastAssistant}
-                    onRegenerate={isLastAssistant ? handleRegenerate : undefined}
-                    onEdit={isUserMsg ? (newContent) => handleEdit(m.id, newContent) : undefined}
-                    isEditing={editingMsgId === m.id}
-                    onCancelEdit={() => setEditingMsgId(null)}
-                    onArtifactClick={handleArtifactClick}
-                    isSpeaking={isSpeaking}
-                    onSpeak={() => speak(m.content)}
-                    onStopSpeak={stopSpeak}
-                  />
-                  {m.citations && m.citations.length > 0 && (
-                    <CitationsCard citations={m.citations} />
-                  )}
-                  {m.relatedQuestions && m.relatedQuestions.length > 0 && (
-                    <RelatedQuestions questions={m.relatedQuestions} onQuestionClick={handleSend} />
-                  )}
-                  {m.outputFiles && m.outputFiles.length > 0 && (
-                    <div className="flex gap-2 flex-wrap mb-4 pl-11">
-                      {m.outputFiles.map((f: any, i: number) => (
-                        <a key={i} href={f.downloadUrl} className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors dark:text-gray-300">
-                          <Paperclip className="w-3 h-3" /> {f.name}
-                          <span className="text-gray-400">({(f.size / 1024).toFixed(1)} KB)</span>
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            return (
+              <div key={m.id}>
+                {m.citations && m.citations.length > 0 && (
+                  <CitationsCard citations={m.citations} />
+                )}
+                <MessageBubble
+                  role={m.role}
+                  content={m.content}
+                  createdAt={m.createdAt}
+                  isLast={isLastAssistant}
+                  onRegenerate={isLastAssistant ? handleRegenerate : undefined}
+                  onEdit={isUserMsg ? (newContent) => handleEdit(m.id, newContent) : undefined}
+                  isEditing={editingMsgId === m.id}
+                  onCancelEdit={() => setEditingMsgId(null)}
+                  isSpeaking={isSpeaking}
+                  onSpeak={() => speak(m.content)}
+                  onStopSpeak={stopSpeak}
+                />
+                {m.relatedQuestions && m.relatedQuestions.length > 0 && (
+                  <RelatedQuestions questions={m.relatedQuestions} onQuestionClick={handleSend} />
+                )}
+              </div>
+            );
+          })}
 
-            <div ref={messagesEndRef} />
-          </div>
-
-          <div className="px-5 py-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-2">
-            <PromptTemplates onSelect={(prompt) => setInput(prompt.replace('{input}', ''))} />
-            <ImageGenerator />
-            <CodeRunner />
-            <ImageInput onImageAnalyzed={(desc) => setInput(prev => prev + '\n\n' + desc)} />
-            {currentConvId && <ConversationComments conversationId={currentConvId} />}
-          </div>
-
-          <ChatInput
-            input={input}
-            setInput={setInput}
-            onSend={handleSend}
-            onVoice={toggleVoice}
-            isRecording={isRecording}
-            loading={loading}
-            showUpload={false}
-            placeholder={`Tanya ${agent.name}...`}
-          />
+          <div ref={messagesEndRef} />
         </div>
-
-        {showArtifactPanel && (
-          <ArtifactPanel
-            artifacts={artifacts}
-            activeArtifactId={activeArtifactId}
-            onSelectArtifact={selectArtifact}
-            onClose={() => { setShowArtifactPanel(false); closeArtifact(); }}
-          />
-        )}
       </div>
-    </>
+
+      {/* INPUT */}
+      {messages.length > 0 && (
+        <ChatInput
+          input={input}
+          setInput={setInput}
+          onSend={handleSend}
+          onVoice={toggleVoice}
+          isRecording={isRecording}
+          loading={loading}
+          showUpload={authenticated}
+          showVoice={authenticated}
+          placeholder={`Tanya ${agent.name}...`}
+        />
+      )}
+    </div>
   );
 }
