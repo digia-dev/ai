@@ -4,6 +4,7 @@ import { apiFetch } from '../lib/api';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
 import { useArtifacts } from '../hooks/useArtifacts';
+import { useTranslation } from '../hooks/useTranslation';
 import MessageBubble from '../components/MessageBubble';
 import StreamingBubble from '../components/StreamingBubble';
 import CitationsCard from '../components/CitationsCard';
@@ -17,6 +18,7 @@ import PromptTemplates from '../components/PromptTemplates';
 import ImageGenerator from '../components/ImageGenerator';
 import CodeRunner from '../components/CodeRunner';
 import ConversationComments from '../components/ConversationComments';
+import LanguageToggle from '../components/LanguageToggle';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
 import { ArrowLeft, Paperclip, Share2, Copy, Check, ExternalLink, Square, Code } from 'lucide-react';
@@ -33,6 +35,7 @@ interface Agent {
 export default function AgentChat() {
   const { agentId } = useParams();
   const navigate = useNavigate();
+  const { locale, toggleLocale, t } = useTranslation();
   const [agent, setAgent] = useState<Agent | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -167,7 +170,8 @@ export default function AgentChat() {
         {messages.length > 0 && (
           <ExportMenu messages={messages} title={agent.name} />
         )}
-        <button onClick={handleShare} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" title="Bagikan hasil">
+        <LanguageToggle locale={locale} onToggle={toggleLocale} />
+        <button onClick={handleShare} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" title={t('agent.share')}>
           <Share2 className="w-3 h-3" /> Bagikan
         </button>
       </div>

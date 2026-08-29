@@ -3,6 +3,7 @@ import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
 import { useArtifacts } from '../hooks/useArtifacts';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useTranslation } from '../hooks/useTranslation';
 import MessageBubble from '../components/MessageBubble';
 import StreamingBubble from '../components/StreamingBubble';
 import ClarificationCard from '../components/ClarificationCard';
@@ -18,9 +19,12 @@ import PromptTemplates from '../components/PromptTemplates';
 import ImageGenerator from '../components/ImageGenerator';
 import CodeRunner from '../components/CodeRunner';
 import ConversationComments from '../components/ConversationComments';
+import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import WebhooksManager from '../components/WebhooksManager';
+import LanguageToggle from '../components/LanguageToggle';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
-import { Sparkles, Square, Code, Keyboard } from 'lucide-react';
+import { Sparkles, Square, Code, Keyboard, BarChart3, Webhook } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
 interface Clarification {
@@ -34,14 +38,17 @@ export default function Chat() {
     loadConversations, sendMessage, stopGeneration, currentConvId, regenerateMessage, editMessage,
     branches, currentBranchId, loadBranches, switchBranch, createBranch,
   } = useChat();
+  const { locale, toggleLocale, t } = useTranslation();
   const [input, setInput] = useState('');
   const [clarification, setClarification] = useState<Clarification | null>(null);
-  const [chatTitle, setChatTitle] = useState('Chat Baru');
+  const [chatTitle, setChatTitle] = useState(t('chat.new'));
   const [uploading, setUploading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
   const [showArtifactPanel, setShowArtifactPanel] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showWebhooks, setShowWebhooks] = useState(false);
 
   const { artifacts, activeArtifactId, selectArtifact, closeArtifact } = useArtifacts(messages);
 
@@ -53,7 +60,7 @@ export default function Chat() {
     'ctrl+k': () => setShowShortcuts(s => !s),
     'ctrl+n': () => {
       setInput('');
-      setChatTitle('Chat Baru');
+      setChatTitle(t('chat.new'));
     },
     'ctrl+enter': () => {
       if (input.trim()) handleSend();
@@ -268,14 +275,31 @@ export default function Chat() {
               <CodeRunner />
               {currentConvId && <ConversationComments conversationId={currentConvId} />}
               <button
+                onClick={() => setShowAnalytics(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                title={t('chat.analytics')}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setShowWebhooks(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                title={t('chat.webhooks')}
+              >
+                <Webhook className="w-3.5 h-3.5" />
+              </button>
+              <button
                 onClick={() => setShowShortcuts(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                title="Keyboard shortcuts"
+                title={t('chat.shortcuts')}
               >
                 <Keyboard className="w-3.5 h-3.5" />
               </button>
             </div>
-            <span className="text-[10px] text-gray-400">Ctrl+K untuk shortcuts</span>
+            <div className="flex items-center gap-2">
+              <LanguageToggle locale={locale} onToggle={toggleLocale} />
+              <span className="text-[10px] text-gray-400">Ctrl+K</span>
+            </div>
           </div>
 
           <ChatInput
@@ -287,7 +311,7 @@ export default function Chat() {
             isRecording={isRecording}
             loading={loading}
             uploading={uploading}
-            placeholder="Tanya apa saja ke Tara..."
+            placeholder={t('chat.placeholder')}
           />
         </div>
 
@@ -300,6 +324,9 @@ export default function Chat() {
           />
         )}
       </div>
+
+      <AnalyticsDashboard isOpen={showAnalytics} onClose={() => setShowAnalytics(false)} />
+      <WebhooksManager isOpen={showWebhooks} onClose={() => setShowWebhooks(false)} />
 
       {showShortcuts && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowShortcuts(false)}>

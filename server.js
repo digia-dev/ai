@@ -82,6 +82,15 @@ async function runMigrations() {
       content TEXT NOT NULL,
       "createdAt" TIMESTAMP DEFAULT NOW()
     )`);
+    await client.query(`CREATE TABLE IF NOT EXISTS "Webhook" (
+      id SERIAL PRIMARY KEY,
+      "userId" INTEGER REFERENCES "User"(id) ON DELETE CASCADE,
+      name VARCHAR(100) NOT NULL,
+      type VARCHAR(20) NOT NULL,
+      url TEXT NOT NULL,
+      active BOOLEAN DEFAULT true,
+      "createdAt" TIMESTAMP DEFAULT NOW()
+    )`);
     await client.query('ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "branchId" INTEGER DEFAULT 1');
     console.log('Migrations completed');
   } catch (err) {
@@ -949,6 +958,146 @@ app.post('/api/conversations/:id/comments', auth, async (req, res) => {
       [req.params.id, req.user.id, content]
     );
     res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ ANALYTICS ============
+
+app.get('/api/analytics/usage', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const totalConversations = await pool.query(
+      'SELECT COUNT(*) as count FROM "Conversation" WHERE "userId" = $1',
+      [userId]
+    );
+
+    const totalMessages = await pool.query(
+      'SELECT COUNT(*) as count FROM "Message" m JOIN "Conversation" c ON m."conversationId" = c.id WHERE c."userId" = $1',
+      [userId]
+    );
+
+    const totalTokens = await pool.query(
+      'SELECT COALESCE(SUM("tokensUsed"), 0) as total FROM "Message" m JOIN "Conversation" c ON m."conversationId" = c.id WHERE c."userId" = $1',
+      [userId]
+    );
+
+    const tokenUsage = await pool.query(
+      `SELECT DATE("createdAt") as date, SUM(amount) as used
+       FROM "TokenLedger" WHERE "userId" = $1 AND type = 'usage'
+       GROUP BY DATE("createdAt") ORDER BY date DESC LIMIT 30`,
+      [userId]
+    );
+
+    const agentUsage = await pool.query(
+      `SELECT a.name, COUNT(ac.id) as conversations
+       FROM "AgentConversation" ac
+       JOIN "Agent" a ON ac."agentId" = a.id
+       WHERE ac."userId" = $1
+       GROUP BY a.name ORDER BY conversations DESC LIMIT 5`,
+      [userId]
+    );
+
+    const recentActivity = await pool.query(
+      `SELECT m."createdAt", m.role, LEFT(m.content, 100) as preview
+       FROM "Message" m
+       JOIN "Conversation" c ON m."conversationId" = c.id
+       WHERE c."userId" = $1
+       ORDER BY m."createdAt" DESC LIMIT 10`,
+      [userId]
+    );
+
+    const billing = await pool.query(
+      'SELECT "tokenBalance", plan, "trialTokens" FROM "UserBilling" WHERE "userId" = $1',
+      [userId]
+    );
+
+    res.json({
+      totalConversations: parseInt(totalConversations.rows[0].count),
+      totalMessages: parseInt(totalMessages.rows[0].count),
+      totalTokens: parseInt(totalTokens.rows[0].total),
+      tokenUsage: tokenUsage.rows,
+      agentUsage: agentUsage.rows,
+      recentActivity: recentActivity.rows,
+      billing: billing.rows[0] || {},
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ WEBHOOKS ============
+
+app.get('/api/webhooks', auth, async (req, res) => {
+  try {
+    const webhooks = await pool.query(
+      'SELECT id, name, type, url, active, "createdAt" FROM "Webhook" WHERE "userId" = $1 ORDER BY "createdAt" DESC',
+      [req.user.id]
+    );
+    res.json(webhooks.rows);
+  } catch (err) {
+    res.json([]);
+  }
+});
+
+app.post('/api/webhooks', auth, async (req, res) => {
+  try {
+    const { name, type, url } = req.body;
+    if (!name || !type || !url) return res.status(400).json({ error: 'Name, type, and url required' });
+
+    const validTypes = ['slack', 'discord', 'email'];
+    if (!validTypes.includes(type)) return res.status(400).json({ error: 'Invalid webhook type' });
+
+    const result = await pool.query(
+      'INSERT INTO "Webhook" ("userId", name, type, url) VALUES ($1, $2, $3, $4) RETURNING *',
+      [req.user.id, name, type, url]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/webhooks/:id', auth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM "Webhook" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/webhooks/:id/test', auth, async (req, res) => {
+  try {
+    const webhook = await pool.query(
+      'SELECT * FROM "Webhook" WHERE id = $1 AND "userId" = $2',
+      [req.params.id, req.user.id]
+    );
+    if (webhook.rows.length === 0) return res.status(404).json({ error: 'Webhook not found' });
+
+    const wh = webhook.rows[0];
+    let payload = {};
+
+    if (wh.type === 'slack') {
+      payload = { text: 'Test from Tara AI', username: 'Tara Bot' };
+    } else if (wh.type === 'discord') {
+      payload = { content: 'Test from Tara AI' };
+    } else if (wh.type === 'email') {
+      payload = { to: wh.url, subject: 'Tara AI Test', body: 'Test notification from Tara AI' };
+    }
+
+    try {
+      await fetch(wh.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      res.json({ ok: true, message: 'Webhook tested successfully' });
+    } catch (err) {
+      res.json({ ok: false, message: 'Webhook test failed: ' + err.message });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
