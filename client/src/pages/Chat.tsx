@@ -135,6 +135,8 @@ export default function Chat() {
         currentBranchId={currentBranchId}
         onSwitchBranch={handleSwitchBranch}
         onCreateBranch={handleCreateBranch}
+        webSearch={webSearch}
+        onToggleSearch={() => setWebSearch(s => !s)}
       />
 
       {/* MESSAGES — scrollable middle */}
@@ -224,8 +226,6 @@ export default function Chat() {
         loading={loading}
         uploading={uploading}
         placeholder={t('chat.placeholder')}
-        webSearch={webSearch}
-        onToggleSearch={() => setWebSearch(s => !s)}
       />
     </div>
   );
