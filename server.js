@@ -930,6 +930,97 @@ app.post('/api/execute-code', auth, async (req, res) => {
   }
 });
 
+// ============ MODEL COMPARISON ============
+
+app.post('/api/compare-models', auth, async (req, res) => {
+  try {
+    const { prompt, model } = req.body;
+    if (!prompt || !model) return res.status(400).json({ error: 'Prompt and model required' });
+
+    const aiRes = await fetch(process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'Kamu adalah asisten AI yang membantu dalam Bahasa Indonesia.' },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 1000,
+      }),
+    });
+
+    const data = await aiRes.json();
+    const response = data.choices?.[0]?.message?.content || 'Tidak ada response';
+    res.json({ response, model });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ IMAGE ANALYSIS ============
+
+app.post('/api/analyze-image', auth, async (req, res) => {
+  try {
+    const { image } = req.body;
+    if (!image) return res.status(400).json({ error: 'Image required' });
+
+    const billing = await pool.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1', [req.user.id]);
+    if (!billing.rows[0] || billing.rows[0].tokenBalance < 20) {
+      return res.status(402).json({ error: 'Token habis (butuh 20 token)' });
+    }
+
+    const aiRes = await fetch(process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.0-flash-exp:free',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Analisis gambar ini. Jika ada teks, lakukan OCR dan tulis teksnya. Berikan deskripsi lengkap dalam Bahasa Indonesia.' },
+              { type: 'image_url', image_url: { url: image } },
+            ],
+          },
+        ],
+        max_tokens: 500,
+      }),
+    });
+
+    const data = await aiRes.json();
+    const description = data.choices?.[0]?.message?.content || 'Tidak dapat menganalisis gambar';
+
+    const tokensUsed = 20;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
+      const newBalance = Math.max(0, (bal.rows[0]?.tokenBalance || 0) - tokensUsed);
+      await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
+      await client.query(
+        'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+        [req.user.id, 'usage', tokensUsed, newBalance, 'Image analysis']
+      );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+
+    res.json({ description, tokensUsed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ============ CONVERSATION COMMENTS ============
 
 app.get('/api/conversations/:id/comments', auth, async (req, res) => {

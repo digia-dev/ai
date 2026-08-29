@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
-import { Copy, Check, RotateCw, Pencil, ExternalLink } from 'lucide-react';
+import { Copy, Check, RotateCw, Pencil, ExternalLink, Volume2, VolumeX } from 'lucide-react';
 
 interface MessageBubbleProps {
   role: string;
@@ -13,6 +13,9 @@ interface MessageBubbleProps {
   isEditing?: boolean;
   onCancelEdit?: () => void;
   onArtifactClick?: (language: string, content: string, title?: string) => void;
+  isSpeaking?: boolean;
+  onSpeak?: () => void;
+  onStopSpeak?: () => void;
 }
 
 function CodeBlock({ children, className, onArtifactClick, ...props }: any) {
@@ -82,6 +85,9 @@ export default function MessageBubble({
   isEditing = false,
   onCancelEdit,
   onArtifactClick,
+  isSpeaking = false,
+  onSpeak,
+  onStopSpeak,
 }: MessageBubbleProps) {
   const isUser = role === 'user';
   const [copied, setCopied] = useState(false);
@@ -187,6 +193,15 @@ export default function MessageBubble({
               title="Regenerate"
             >
               <RotateCw className="w-3 h-3" />
+            </button>
+          )}
+          {!isUser && onSpeak && (
+            <button
+              onClick={isSpeaking ? onStopSpeak : onSpeak}
+              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-black transition-opacity"
+              title={isSpeaking ? 'Stop' : 'Dengarkan'}
+            >
+              {isSpeaking ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
             </button>
           )}
         </div>

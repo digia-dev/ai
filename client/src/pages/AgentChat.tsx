@@ -5,6 +5,7 @@ import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
 import { useArtifacts } from '../hooks/useArtifacts';
 import { useTranslation } from '../hooks/useTranslation';
+import { useTTS } from '../hooks/useTTS';
 import MessageBubble from '../components/MessageBubble';
 import StreamingBubble from '../components/StreamingBubble';
 import CitationsCard from '../components/CitationsCard';
@@ -17,6 +18,7 @@ import SummaryCard from '../components/SummaryCard';
 import PromptTemplates from '../components/PromptTemplates';
 import ImageGenerator from '../components/ImageGenerator';
 import CodeRunner from '../components/CodeRunner';
+import ImageInput from '../components/ImageInput';
 import ConversationComments from '../components/ConversationComments';
 import LanguageToggle from '../components/LanguageToggle';
 import { SkeletonChat } from '../components/Skeleton';
@@ -52,6 +54,7 @@ export default function AgentChat() {
   const [showArtifactPanel, setShowArtifactPanel] = useState(false);
 
   const { artifacts, activeArtifactId, selectArtifact, closeArtifact } = useArtifacts(messages);
+  const { isSpeaking, speak, stop: stopSpeak } = useTTS();
 
   const { isRecording, toggle: toggleVoice } = useVoice({
     onResult: (transcript) => setInput(prev => prev + transcript),
@@ -249,6 +252,9 @@ export default function AgentChat() {
                     isEditing={editingMsgId === m.id}
                     onCancelEdit={() => setEditingMsgId(null)}
                     onArtifactClick={handleArtifactClick}
+                    isSpeaking={isSpeaking}
+                    onSpeak={() => speak(m.content)}
+                    onStopSpeak={stopSpeak}
                   />
                   {m.citations && m.citations.length > 0 && (
                     <CitationsCard citations={m.citations} />
@@ -277,6 +283,7 @@ export default function AgentChat() {
             <PromptTemplates onSelect={(prompt) => setInput(prompt.replace('{input}', ''))} />
             <ImageGenerator />
             <CodeRunner />
+            <ImageInput onImageAnalyzed={(desc) => setInput(prev => prev + '\n\n' + desc)} />
             {currentConvId && <ConversationComments conversationId={currentConvId} />}
           </div>
 

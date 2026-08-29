@@ -4,6 +4,7 @@ import { useVoice } from '../hooks/useVoice';
 import { useArtifacts } from '../hooks/useArtifacts';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useTranslation } from '../hooks/useTranslation';
+import { useTTS } from '../hooks/useTTS';
 import MessageBubble from '../components/MessageBubble';
 import StreamingBubble from '../components/StreamingBubble';
 import ClarificationCard from '../components/ClarificationCard';
@@ -18,6 +19,8 @@ import SummaryCard from '../components/SummaryCard';
 import PromptTemplates from '../components/PromptTemplates';
 import ImageGenerator from '../components/ImageGenerator';
 import CodeRunner from '../components/CodeRunner';
+import ImageInput from '../components/ImageInput';
+import ModelCompare from '../components/ModelCompare';
 import ConversationComments from '../components/ConversationComments';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import WebhooksManager from '../components/WebhooksManager';
@@ -51,6 +54,7 @@ export default function Chat() {
   const [showWebhooks, setShowWebhooks] = useState(false);
 
   const { artifacts, activeArtifactId, selectArtifact, closeArtifact } = useArtifacts(messages);
+  const { isSpeaking, speak, stop: stopSpeak } = useTTS();
 
   const { isRecording, toggle: toggleVoice } = useVoice({
     onResult: (transcript) => setInput(prev => prev + transcript),
@@ -246,6 +250,9 @@ export default function Chat() {
                     isEditing={editingMsgId === m.id}
                     onCancelEdit={() => setEditingMsgId(null)}
                     onArtifactClick={handleArtifactClick}
+                    isSpeaking={isSpeaking}
+                    onSpeak={() => speak(m.content)}
+                    onStopSpeak={stopSpeak}
                   />
                   {m.citations && m.citations.length > 0 && (
                     <CitationsCard citations={m.citations} />
@@ -274,6 +281,8 @@ export default function Chat() {
               <ImageGenerator />
               <CodeRunner />
               {currentConvId && <ConversationComments conversationId={currentConvId} />}
+              <ImageInput onImageAnalyzed={(desc) => setInput(prev => prev + '\n\n' + desc)} />
+              <ModelCompare />
               <button
                 onClick={() => setShowAnalytics(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
