@@ -67,6 +67,14 @@ async function runMigrations() {
       "branchName" VARCHAR(100) DEFAULT 'main',
       "createdAt" TIMESTAMP DEFAULT NOW()
     )`);
+    await client.query(`CREATE TABLE IF NOT EXISTS "PromptTemplate" (
+      id SERIAL PRIMARY KEY,
+      "userId" INTEGER REFERENCES "User"(id) ON DELETE CASCADE,
+      name VARCHAR(100) NOT NULL,
+      category VARCHAR(50) DEFAULT 'Custom',
+      prompt TEXT NOT NULL,
+      "createdAt" TIMESTAMP DEFAULT NOW()
+    )`);
     await client.query('ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "branchId" INTEGER DEFAULT 1');
     console.log('Migrations completed');
   } catch (err) {
@@ -696,6 +704,96 @@ app.get('/api/conversations/:id/messages/:branchId', auth, async (req, res) => {
       [req.params.id, req.params.branchId]
     );
     res.json(messages.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ CONVERSATION SUMMARY ============
+
+app.post('/api/conversations/:id/summary', auth, async (req, res) => {
+  try {
+    const conv = await pool.query(
+      'SELECT id FROM "Conversation" WHERE id = $1 AND "userId" = $2',
+      [req.params.id, req.user.id]
+    );
+    if (conv.rows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
+
+    const messages = await pool.query(
+      'SELECT role, content FROM "Message" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC',
+      [req.params.id]
+    );
+
+    const conversationText = messages.rows.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n\n');
+
+    const summaryRes = await fetch(process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat-v3-0324:free',
+        messages: [
+          { role: 'system', content: 'Buat ringkasan percakapan dalam Bahasa Indonesia. Format: 3-5 bullet points yang merangkum poin-poin utama. Gunakan format markdown.' },
+          { role: 'user', content: conversationText.slice(0, 8000) },
+        ],
+        max_tokens: 500,
+      }),
+    });
+
+    const summaryData = await summaryRes.json();
+    const summary = summaryData.choices?.[0]?.message?.content || 'Gagal membuat ringkasan';
+
+    res.json({ summary });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ PROMPT TEMPLATES ============
+
+const DEFAULT_TEMPLATES = [
+  { name: 'Analisis Data', category: 'Analisis', prompt: 'Analisis data berikut dan berikan insight penting:\n\n{input}' },
+  { name: 'Ringkas Dokumen', category: 'Ringkas', prompt: 'Ringkas dokumen berikut dalam 3-5 poin utama:\n\n{input}' },
+  { name: 'Terjemahkan', category: 'Terjemah', prompt: 'Terjemahkan teks berikut ke Bahasa Indonesia:\n\n{input}' },
+  { name: 'Perbaiki Tulisan', category: 'Edit', prompt: 'Perbaiki tata bahasa dan ejaan teks berikut:\n\n{input}' },
+  { name: 'Buat Email', category: 'Email', prompt: 'Buat email profesional untuk:\n\n{input}' },
+  { name: 'Buat Kode', category: 'Kode', prompt: 'Buat kode program untuk:\n\n{input}\n\nBerikan penjelasan kode.' },
+  { name: 'Brainstorm', category: 'Ide', prompt: 'Brainstorm ide untuk:\n\n{input}\n\nBerikan minimal 5 ide kreatif.' },
+  { name: 'Buat Rencana', category: 'Rencana', prompt: 'Buat rencana langkah demi langkah untuk:\n\n{input}' },
+];
+
+app.get('/api/templates', auth, async (req, res) => {
+  try {
+    const userTemplates = await pool.query(
+      'SELECT id, name, category, prompt, "createdAt" FROM "PromptTemplate" WHERE "userId" = $1 ORDER BY "createdAt" DESC',
+      [req.user.id]
+    );
+    res.json([...DEFAULT_TEMPLATES, ...userTemplates.rows]);
+  } catch (err) {
+    res.json(DEFAULT_TEMPLATES);
+  }
+});
+
+app.post('/api/templates', auth, async (req, res) => {
+  try {
+    const { name, category, prompt } = req.body;
+    if (!name || !prompt) return res.status(400).json({ error: 'Name and prompt required' });
+    const result = await pool.query(
+      'INSERT INTO "PromptTemplate" ("userId", name, category, prompt) VALUES ($1, $2, $3, $4) RETURNING *',
+      [req.user.id, name, category || 'Custom', prompt]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/templates/:id', auth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM "PromptTemplate" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

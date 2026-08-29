@@ -12,6 +12,8 @@ import FocusModeSelector from '../components/FocusModeSelector';
 import ChatInput from '../components/ChatInput';
 import ArtifactPanel from '../components/ArtifactPanel';
 import ExportMenu from '../components/ExportMenu';
+import SummaryCard from '../components/SummaryCard';
+import PromptTemplates from '../components/PromptTemplates';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
 import { ArrowLeft, Paperclip, Share2, Copy, Check, ExternalLink, Square, Code } from 'lucide-react';
@@ -195,6 +197,10 @@ export default function AgentChat() {
               </div>
             )}
 
+            {messages.length > 5 && currentConvId && (
+              <SummaryCard conversationId={currentConvId} />
+            )}
+
             {messages.map((m, idx) => {
               if (m.role === 'assistant' && isStreaming && m.content === '' && streamingContent) {
                 return (
@@ -258,6 +264,10 @@ export default function AgentChat() {
             })}
 
             <div ref={messagesEndRef} />
+          </div>
+
+          <div className="px-5 py-2 border-t border-gray-100 dark:border-gray-800">
+            <PromptTemplates onSelect={(prompt) => setInput(prompt.replace('{input}', ''))} />
           </div>
 
           <ChatInput

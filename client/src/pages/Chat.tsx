@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
 import { useArtifacts } from '../hooks/useArtifacts';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import MessageBubble from '../components/MessageBubble';
 import StreamingBubble from '../components/StreamingBubble';
 import ClarificationCard from '../components/ClarificationCard';
@@ -12,9 +13,11 @@ import ChatInput from '../components/ChatInput';
 import ArtifactPanel from '../components/ArtifactPanel';
 import ExportMenu from '../components/ExportMenu';
 import BranchSelector from '../components/BranchSelector';
+import SummaryCard from '../components/SummaryCard';
+import PromptTemplates from '../components/PromptTemplates';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
-import { Sparkles, Square, Code } from 'lucide-react';
+import { Sparkles, Square, Code, Keyboard } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
 interface Clarification {
@@ -35,11 +38,27 @@ export default function Chat() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
   const [showArtifactPanel, setShowArtifactPanel] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const { artifacts, activeArtifactId, selectArtifact, closeArtifact } = useArtifacts(messages);
 
   const { isRecording, toggle: toggleVoice } = useVoice({
     onResult: (transcript) => setInput(prev => prev + transcript),
+  });
+
+  useKeyboardShortcuts({
+    'ctrl+k': () => setShowShortcuts(s => !s),
+    'ctrl+n': () => {
+      setInput('');
+      setChatTitle('Chat Baru');
+    },
+    'ctrl+enter': () => {
+      if (input.trim()) handleSend();
+    },
+    'escape': () => {
+      if (isStreaming) stopGeneration();
+      if (showArtifactPanel) { setShowArtifactPanel(false); closeArtifact(); }
+    },
   });
 
   useEffect(() => {
@@ -98,6 +117,10 @@ export default function Chat() {
       await switchBranch(currentConvId, branch.id);
       toast.success(`Branch "${name}" dibuat`);
     }
+  };
+
+  const handleTemplateSelect = (prompt: string) => {
+    setInput(prompt.replace('{input}', ''));
   };
 
   const handleUpload = async (files: FileList) => {
@@ -186,6 +209,10 @@ export default function Chat() {
               </div>
             )}
 
+            {messages.length > 5 && currentConvId && (
+              <SummaryCard conversationId={currentConvId} />
+            )}
+
             {messages.map((m, idx) => {
               if (m.role === 'assistant' && isStreaming && m.content === '' && streamingContent) {
                 return <StreamingBubble key={m.id} content={streamingContent} />;
@@ -231,6 +258,20 @@ export default function Chat() {
             <div ref={messagesEndRef} />
           </div>
 
+          <div className="px-5 py-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <PromptTemplates onSelect={handleTemplateSelect} />
+              <button
+                onClick={() => setShowShortcuts(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                title="Keyboard shortcuts"
+              >
+                <Keyboard className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <span className="text-[10px] text-gray-400">Ctrl+K untuk shortcuts</span>
+          </div>
+
           <ChatInput
             input={input}
             setInput={setInput}
@@ -253,6 +294,21 @@ export default function Chat() {
           />
         )}
       </div>
+
+      {showShortcuts && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowShortcuts(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold mb-4 dark:text-white">Keyboard Shortcuts</h3>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">Kirim pesan</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+Enter</kbd></div>
+              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">Chat baru</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+N</kbd></div>
+              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">Hentikan</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Esc</kbd></div>
+              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">Toggle shortcuts</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+K</kbd></div>
+            </div>
+            <button onClick={() => setShowShortcuts(false)} className="mt-4 w-full py-2 text-xs bg-black dark:bg-white text-white dark:text-black rounded-lg">Tutup</button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
