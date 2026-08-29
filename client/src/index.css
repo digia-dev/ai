@@ -37,10 +37,26 @@
 
 body {
   font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 
 .dark {
   color-scheme: dark;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+@media (max-width: 768px) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+  
+  input, textarea {
+    font-size: 16px !important;
+  }
 }
 
 .dark .bg-white {
