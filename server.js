@@ -111,6 +111,133 @@ const MODEL_CONFIG = {
   'google/gemini-2.5-flash-lite': { name: 'Gemini 2.5 Flash Lite', context: '1M' },
 };
 
+// ============ TAVILY SEARCH ============
+
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
+const TAVILY_API_URL = 'https://api.tavily.com/search';
+
+const FOCUS_MODES = {
+  general: { label: 'General', searchDepth: 'basic', topic: 'general' },
+  academic: { label: 'Academic', searchDepth: 'advanced', topic: 'general', includeDomains: ['scholar.google.com', 'arxiv.org', 'pubmed.ncbi.nlm.nih.gov', 'researchgate.net', 'jstor.org', 'sciencedirect.com'] },
+  news: { label: 'News', searchDepth: 'basic', topic: 'news' },
+  code: { label: 'Code', searchDepth: 'basic', topic: 'general', includeDomains: ['stackoverflow.com', 'github.com', 'dev.to', 'medium.com', 'docs.python.org', 'developer.mozilla.org', 'docs.rs'] },
+};
+
+async function tavilySearch(query, mode = 'general') {
+  if (!TAVILY_API_KEY) return null;
+
+  const config = FOCUS_MODES[mode] || FOCUS_MODES.general;
+  const body = {
+    query,
+    search_depth: config.searchDepth,
+    topic: config.topic,
+    max_results: 5,
+    include_answer: true,
+    include_raw_content: false,
+  };
+
+  if (config.includeDomains) {
+    body.include_domains = config.includeDomains;
+  }
+
+  try {
+    const res = await fetch(TAVILY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: TAVILY_API_KEY, ...body }),
+    });
+
+    if (!res.ok) {
+      console.error('Tavily error:', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    return {
+      answer: data.answer || '',
+      results: (data.results || []).map(r => ({
+        title: r.title,
+        url: r.url,
+        content: r.content,
+        score: r.score,
+      })),
+    };
+  } catch (err) {
+    console.error('Tavily search failed:', err.message);
+    return null;
+  }
+}
+
+function buildSearchContext(searchResult) {
+  if (!searchResult) return '';
+
+  let context = '';
+  if (searchResult.answer) {
+    context += `Ringkasan dari web:\n${searchResult.answer}\n\n`;
+  }
+
+  if (searchResult.results.length > 0) {
+    context += 'Sumber:\n';
+    searchResult.results.forEach((r, i) => {
+      context += `[${i + 1}] ${r.title}\n${r.url}\n${r.content.slice(0, 500)}\n\n`;
+    });
+  }
+
+  return context;
+}
+
+function extractCitations(searchResult) {
+  if (!searchResult || !searchResult.results) return [];
+  return searchResult.results.map(r => ({
+    title: r.title,
+    url: r.url,
+    snippet: r.content.slice(0, 200),
+    score: r.score,
+  }));
+}
+
+async function generateRelatedQuestions(message, aiResponse, searchResult) {
+  if (!TAVILY_API_KEY) return [];
+
+  try {
+    const res = await fetch(process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.APP_URL || 'https://ai.giantara.web.id',
+        'X-Title': 'Tara AI',
+      },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-v4-flash',
+        messages: [
+          {
+            role: 'system',
+            content: 'Generate 3 concise follow-up questions based on the user query and AI response. Return ONLY a JSON array of strings, no markdown, no explanation. Example: ["question 1", "question 2", "question 3"]'
+          },
+          {
+            role: 'user',
+            content: `Pertanyaan user: ${message}\n\nJawaban AI: ${aiResponse.slice(0, 1000)}\n\n${searchResult?.answer ? `Konteks web: ${searchResult.answer.slice(0, 500)}` : ''}`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 200,
+      }),
+    });
+
+    if (!res.ok) return [];
+    const data = await res.json();
+    const content = data.choices[0]?.message?.content || '[]';
+    const match = content.match(/\[[\s\S]*\]/);
+    if (match) {
+      return JSON.parse(match[0]);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 const DEFAULT_AGENTS = [
   {
     name: 'Tara',
@@ -511,7 +638,7 @@ ATURAN:
 
 app.post('/api/chat/stream', auth, async (req, res) => {
   try {
-    const { conversationId, message } = req.body;
+    const { conversationId, message, focusMode } = req.body;
     if (!message) return res.status(400).json({ error: 'Message required' });
 
     let convId = conversationId;
@@ -533,6 +660,11 @@ app.post('/api/chat/stream', auth, async (req, res) => {
       [req.user.id]
     );
 
+    // Web search
+    const searchResult = await tavilySearch(message, focusMode);
+    const searchContext = buildSearchContext(searchResult);
+    const citations = extractCitations(searchResult);
+
     const systemPrompt = `Kamu adalah Tara, asisten AI yang membantu pengguna Giantara ecosystem.
 
 IDENTITAS:
@@ -541,17 +673,21 @@ IDENTITAS:
 - Sifat: Ramah, profesional, membantu
 
 KAPABILITAS:
-1. Mengelola domain giantara.web.id
+1. Menjawab pertanyaan umum dengan informasi terkini dari web
 2. Menganalisis dokumen yang diupload
 3. Membuat reminder dari #input commands
 
 ATURAN:
-- Selalu respon dalam JSON format
+- Gunakan informasi dari hasil pencarian web jika tersedia
+- Sertakan nomor referensi [1], [2], [3] untuk sumber web yang digunakan
 - Jika permintaan ambigu, tampilkan pilihan (clarification)
-- Gunakan citation jika menjawab dari dokumen
 - Jangan pernah mengarang informasi`;
 
     const contextMessages = [{ role: 'system', content: systemPrompt }];
+
+    if (searchContext) {
+      contextMessages.push({ role: 'system', content: `Hasil pencarian web:\n${searchContext}` });
+    }
 
     if (sources.rows.length > 0) {
       const sourceContext = sources.rows.map(s => `[${s.name}]: ${s.content?.slice(0, 2000) || ''}`).join('\n\n');
@@ -627,12 +763,14 @@ ATURAN:
     const files = await extractAndSaveFiles(fullContent, req.user.id, null, convId);
 
     await pool.query(
-      'INSERT INTO "Message" ("conversationId", role, content) VALUES ($1, $2, $3)',
-      [convId, 'assistant', fullContent]
+      'INSERT INTO "Message" ("conversationId", role, content, citations) VALUES ($1, $2, $3, $4)',
+      [convId, 'assistant', fullContent, JSON.stringify(citations)]
     );
     await pool.query('UPDATE "Conversation" SET "updatedAt" = NOW() WHERE id = $1', [convId]);
 
-    res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files })}\n\n`);
+    const relatedQuestions = await generateRelatedQuestions(message, fullContent, searchResult);
+
+    res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files, citations, relatedQuestions })}\n\n`);
     res.end();
   } catch (err) {
     try {
@@ -644,7 +782,7 @@ ATURAN:
 
 app.post('/api/agents/chat/stream', auth, async (req, res) => {
   try {
-    const { agentId, conversationId, message } = req.body;
+    const { agentId, conversationId, message, focusMode } = req.body;
     if (!message || !agentId) return res.status(400).json({ error: 'Agent ID and message required' });
 
     const billing = await pool.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1', [req.user.id]);
@@ -679,6 +817,22 @@ app.post('/api/agents/chat/stream', auth, async (req, res) => {
       [convId]
     );
 
+    // Web search
+    const searchResult = await tavilySearch(message, focusMode);
+    const searchContext = buildSearchContext(searchResult);
+    const citations = extractCitations(searchResult);
+
+    const messages = [
+      { role: 'system', content: agentConfig.systemPrompt },
+    ];
+
+    if (searchContext) {
+      messages.push({ role: 'system', content: `Hasil pencarian web:\n${searchContext}\n\nGunakan nomor referensi [1], [2], [3] untuk sumber web yang digunakan.` });
+    }
+
+    messages.push(...history.rows);
+    messages.push({ role: 'user', content: message });
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -695,11 +849,7 @@ app.post('/api/agents/chat/stream', auth, async (req, res) => {
       },
       body: JSON.stringify({
         model: agentConfig.model,
-        messages: [
-          { role: 'system', content: agentConfig.systemPrompt },
-          ...history.rows,
-          { role: 'user', content: message }
-        ],
+        messages,
         temperature: agentConfig.temperature,
         max_tokens: agentConfig.maxTokens || 4096,
         stream: true,
@@ -747,8 +897,8 @@ app.post('/api/agents/chat/stream', auth, async (req, res) => {
     const tokensUsed = 0;
 
     await pool.query(
-      'INSERT INTO "AgentMessage" ("conversationId", role, content, "outputFiles", "tokensUsed") VALUES ($1, $2, $3, $4, $5)',
-      [convId, 'assistant', fullContent, JSON.stringify(files), tokensUsed]
+      'INSERT INTO "AgentMessage" ("conversationId", role, content, "outputFiles", "tokensUsed", citations) VALUES ($1, $2, $3, $4, $5, $6)',
+      [convId, 'assistant', fullContent, JSON.stringify(files), tokensUsed, JSON.stringify(citations)]
     );
     await pool.query('UPDATE "AgentConversation" SET "updatedAt" = NOW() WHERE id = $1', [convId]);
 

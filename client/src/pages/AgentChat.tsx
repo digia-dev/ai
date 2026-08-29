@@ -5,6 +5,9 @@ import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
 import MessageBubble from '../components/MessageBubble';
 import StreamingBubble from '../components/StreamingBubble';
+import CitationsCard from '../components/CitationsCard';
+import RelatedQuestions from '../components/RelatedQuestions';
+import FocusModeSelector from '../components/FocusModeSelector';
 import ChatInput from '../components/ChatInput';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
@@ -29,7 +32,7 @@ export default function AgentChat() {
   const [copied, setCopied] = useState(false);
 
   const {
-    currentConvId, messages, loading, streamingContent, isStreaming, messagesEndRef,
+    currentConvId, messages, loading, streamingContent, isStreaming, focusMode, setFocusMode, messagesEndRef,
     loadConversations, sendMessage, stopGeneration,
   } = useChat({ agentId: agentId ? Number(agentId) : undefined });
 
@@ -106,6 +109,7 @@ export default function AgentChat() {
         <div className="flex-1 flex items-center gap-2">
           <span className="text-sm font-semibold dark:text-white">{agent.name}</span>
           <span className="text-xs text-gray-400">{modelName}</span>
+          <FocusModeSelector value={focusMode} onChange={setFocusMode} />
           {isStreaming && (
             <button
               onClick={stopGeneration}
@@ -162,7 +166,7 @@ export default function AgentChat() {
                 {m.outputFiles && m.outputFiles.length > 0 && (
                   <div className="flex gap-2 flex-wrap mb-4 pl-11">
                     {m.outputFiles.map((f: any, i: number) => (
-                      <a key={i} href={f.downloadUrl} className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 rounded-lg text-xs hover:bg-gray-200 transition-colors">
+                      <a key={i} href={f.downloadUrl} className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors dark:text-gray-300">
                         <Paperclip className="w-3 h-3" /> {f.name}
                         <span className="text-gray-400">({(f.size / 1024).toFixed(1)} KB)</span>
                       </a>
@@ -175,6 +179,12 @@ export default function AgentChat() {
           return (
             <div key={m.id}>
               <MessageBubble role={m.role} content={m.content} createdAt={m.createdAt} />
+              {m.citations && m.citations.length > 0 && (
+                <CitationsCard citations={m.citations} />
+              )}
+              {m.relatedQuestions && m.relatedQuestions.length > 0 && (
+                <RelatedQuestions questions={m.relatedQuestions} onQuestionClick={handleSend} />
+              )}
               {m.outputFiles && m.outputFiles.length > 0 && (
                 <div className="flex gap-2 flex-wrap mb-4 pl-11">
                   {m.outputFiles.map((f: any, i: number) => (

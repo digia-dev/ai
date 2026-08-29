@@ -4,6 +4,9 @@ import { useVoice } from '../hooks/useVoice';
 import MessageBubble from '../components/MessageBubble';
 import StreamingBubble from '../components/StreamingBubble';
 import ClarificationCard from '../components/ClarificationCard';
+import CitationsCard from '../components/CitationsCard';
+import RelatedQuestions from '../components/RelatedQuestions';
+import FocusModeSelector from '../components/FocusModeSelector';
 import ChatInput from '../components/ChatInput';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
@@ -17,7 +20,7 @@ interface Clarification {
 
 export default function Chat() {
   const {
-    messages, loading, streamingContent, isStreaming, messagesEndRef,
+    messages, loading, streamingContent, isStreaming, focusMode, setFocusMode, messagesEndRef,
     loadConversations, sendMessage, stopGeneration,
   } = useChat();
   const [input, setInput] = useState('');
@@ -73,15 +76,18 @@ export default function Chat() {
     <>
       <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <span className="text-sm font-semibold dark:text-white">{chatTitle}</span>
-        {isStreaming && (
-          <button
-            onClick={stopGeneration}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <Square className="w-3 h-3" />
-            Hentikan
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <FocusModeSelector value={focusMode} onChange={setFocusMode} />
+          {isStreaming && (
+            <button
+              onClick={stopGeneration}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <Square className="w-3 h-3" />
+              Hentikan
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5">
@@ -113,7 +119,17 @@ export default function Chat() {
           if (m.role === 'assistant' && isStreaming && m.id === messages[messages.length - 1]?.id && streamingContent) {
             return <StreamingBubble key={m.id} content={streamingContent} />;
           }
-          return <MessageBubble key={m.id} role={m.role} content={m.content} createdAt={m.createdAt} />;
+          return (
+            <div key={m.id}>
+              <MessageBubble role={m.role} content={m.content} createdAt={m.createdAt} />
+              {m.citations && m.citations.length > 0 && (
+                <CitationsCard citations={m.citations} />
+              )}
+              {m.relatedQuestions && m.relatedQuestions.length > 0 && (
+                <RelatedQuestions questions={m.relatedQuestions} onQuestionClick={handleSend} />
+              )}
+            </div>
+          );
         })}
 
         {clarification && (

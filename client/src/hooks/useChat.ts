@@ -1,12 +1,21 @@
 import { useState, useRef, useCallback } from 'react';
 import { apiFetch, apiFetchStream } from '../lib/api';
 
+interface Citation {
+  title: string;
+  url: string;
+  snippet: string;
+  score: number;
+}
+
 interface Message {
   id: number;
   role: string;
   content: string;
   outputFiles?: any[];
   tokensUsed?: number;
+  citations?: Citation[];
+  relatedQuestions?: string[];
   createdAt?: string;
 }
 
@@ -22,6 +31,7 @@ export function useChat(options: UseChatOptions = {}) {
   const [error, setError] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [focusMode, setFocusMode] = useState<string>('general');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -100,6 +110,8 @@ export function useChat(options: UseChatOptions = {}) {
       content: '',
       outputFiles: [],
       tokensUsed: 0,
+      citations: [],
+      relatedQuestions: [],
       createdAt: new Date().toISOString(),
     }]);
 
@@ -109,8 +121,8 @@ export function useChat(options: UseChatOptions = {}) {
 
       const url = options.agentId ? '/api/agents/chat/stream' : '/api/chat/stream';
       const body = options.agentId
-        ? { agentId: options.agentId, conversationId: currentConvId, message: text }
-        : { conversationId: currentConvId, message: text };
+        ? { agentId: options.agentId, conversationId: currentConvId, message: text, focusMode }
+        : { conversationId: currentConvId, message: text, focusMode };
 
       const res = await apiFetchStream(url, {
         method: 'POST',
@@ -127,6 +139,8 @@ export function useChat(options: UseChatOptions = {}) {
       const decoder = new TextDecoder();
       let buffer = '';
       let accumulated = '';
+      let finalCitations: Citation[] = [];
+      let finalRelatedQuestions: string[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -160,9 +174,11 @@ export function useChat(options: UseChatOptions = {}) {
               }
               if (parsed.conversationId) {
                 setCurrentConvId(parsed.conversationId);
+                finalCitations = parsed.citations || [];
+                finalRelatedQuestions = parsed.relatedQuestions || [];
                 setMessages(prev => prev.map(m =>
                   m.id === assistantMsgId
-                    ? { ...m, content: accumulated, outputFiles: parsed.files || [], conversationId: parsed.conversationId }
+                    ? { ...m, content: accumulated, outputFiles: parsed.files || [], conversationId: parsed.conversationId, citations: finalCitations, relatedQuestions: finalRelatedQuestions }
                     : m
                 ));
               }
@@ -173,7 +189,7 @@ export function useChat(options: UseChatOptions = {}) {
 
       setMessages(prev => prev.map(m =>
         m.id === assistantMsgId
-          ? { ...m, content: accumulated }
+          ? { ...m, content: accumulated, citations: finalCitations, relatedQuestions: finalRelatedQuestions }
           : m
       ));
 
@@ -195,7 +211,7 @@ export function useChat(options: UseChatOptions = {}) {
       setStreamingContent('');
       abortControllerRef.current = null;
     }
-  }, [options.agentId, currentConvId, loading, loadConversations]);
+  }, [options.agentId, currentConvId, loading, loadConversations, focusMode]);
 
   return {
     conversations,
@@ -205,6 +221,8 @@ export function useChat(options: UseChatOptions = {}) {
     error,
     streamingContent,
     isStreaming,
+    focusMode,
+    setFocusMode,
     messagesEndRef,
     loadConversations,
     loadMessages,
