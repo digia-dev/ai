@@ -12,14 +12,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 if (!process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET environment variable is required');
-  process.exit(1);
+  console.warn('WARNING: JWT_SECRET not set — using insecure default. Set JWT_SECRET in .env for production.');
 }
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || 'insecure-dev-secret';
 
 if (!process.env.DB_PASS) {
-  console.error('FATAL: DB_PASS environment variable is required');
-  process.exit(1);
+  console.warn('WARNING: DB_PASS not set — database connection may fail. Set DB_PASS in .env.');
 }
 
 const pool = new pg.Pool({
