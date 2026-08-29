@@ -75,6 +75,13 @@ async function runMigrations() {
       prompt TEXT NOT NULL,
       "createdAt" TIMESTAMP DEFAULT NOW()
     )`);
+    await client.query(`CREATE TABLE IF NOT EXISTS "ConversationComment" (
+      id SERIAL PRIMARY KEY,
+      "conversationId" INTEGER REFERENCES "Conversation"(id) ON DELETE CASCADE,
+      "userId" INTEGER REFERENCES "User"(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      "createdAt" TIMESTAMP DEFAULT NOW()
+    )`);
     await client.query('ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "branchId" INTEGER DEFAULT 1');
     console.log('Migrations completed');
   } catch (err) {
@@ -794,6 +801,154 @@ app.delete('/api/templates/:id', auth, async (req, res) => {
   try {
     await pool.query('DELETE FROM "PromptTemplate" WHERE id = $1 AND "userId" = $2', [req.params.id, req.user.id]);
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ IMAGE GENERATION ============
+
+app.post('/api/generate-image', auth, async (req, res) => {
+  try {
+    const { prompt, size = '512x512' } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt required' });
+
+    const billing = await pool.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1', [req.user.id]);
+    if (!billing.rows[0] || billing.rows[0].tokenBalance < 50) {
+      return res.status(402).json({ error: 'Token habis (butuh 50 token)', upgrade_url: '/account/billing' });
+    }
+
+    const imageRes = await fetch('https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.HF_API_KEY || ''}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ inputs: prompt }),
+    });
+
+    if (!imageRes.ok) {
+      const fallbackRes = await fetch(`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true`);
+      if (fallbackRes.ok) {
+        const buffer = await fallbackRes.buffer();
+        const filename = `img-${Date.now()}.png`;
+        const filepath = path.join('/home/giantar1/ai/uploads', filename);
+        fs.writeFileSync(filepath, buffer);
+
+        const tokensUsed = 50;
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
+          const newBalance = Math.max(0, (bal.rows[0]?.tokenBalance || 0) - tokensUsed);
+          await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
+          await client.query(
+            'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+            [req.user.id, 'usage', tokensUsed, newBalance, 'Image generation']
+          );
+          await client.query('COMMIT');
+        } catch (e) {
+          await client.query('ROLLBACK');
+        } finally {
+          client.release();
+        }
+
+        return res.json({ url: `/uploads/${filename}`, prompt, tokensUsed });
+      }
+      return res.status(500).json({ error: 'Gagal generate gambar' });
+    }
+
+    const buffer = await imageRes.buffer();
+    const filename = `img-${Date.now()}.png`;
+    const filepath = path.join('/home/giantar1/ai/uploads', filename);
+    fs.writeFileSync(filepath, buffer);
+
+    const tokensUsed = 50;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
+      const newBalance = Math.max(0, (bal.rows[0]?.tokenBalance || 0) - tokensUsed);
+      await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
+      await client.query(
+        'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+        [req.user.id, 'usage', tokensUsed, newBalance, 'Image generation']
+      );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+
+    res.json({ url: `/uploads/${filename}`, prompt, tokensUsed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ CODE EXECUTION ============
+
+app.post('/api/execute-code', auth, async (req, res) => {
+  try {
+    const { code, language = 'javascript' } = req.body;
+    if (!code) return res.status(400).json({ error: 'Code required' });
+
+    const { execSync } = require('child_process');
+    const tmpFile = path.join('/tmp', `code-${Date.now()}.${language === 'python' ? 'py' : 'js'}`);
+    let output = '';
+    let error = '';
+
+    try {
+      fs.writeFileSync(tmpFile, code);
+
+      if (language === 'python') {
+        output = execSync(`python3 ${tmpFile} 2>&1`, { timeout: 10000, encoding: 'utf-8' });
+      } else if (language === 'javascript') {
+        output = execSync(`node ${tmpFile} 2>&1`, { timeout: 10000, encoding: 'utf-8' });
+      } else {
+        return res.status(400).json({ error: 'Hanya JavaScript dan Python yang didukung' });
+      }
+    } catch (err) {
+      error = err.stderr || err.message || 'Execution failed';
+    } finally {
+      try { fs.unlinkSync(tmpFile); } catch {}
+    }
+
+    res.json({ output: output || '', error });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ CONVERSATION COMMENTS ============
+
+app.get('/api/conversations/:id/comments', auth, async (req, res) => {
+  try {
+    const comments = await pool.query(
+      `SELECT c.id, c.content, c."createdAt", u.name as "userName"
+       FROM "ConversationComment" c
+       JOIN "User" u ON c."userId" = u.id
+       WHERE c."conversationId" = $1
+       ORDER BY c."createdAt" ASC`,
+      [req.params.id]
+    );
+    res.json(comments.rows);
+  } catch (err) {
+    res.json([]);
+  }
+});
+
+app.post('/api/conversations/:id/comments', auth, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ error: 'Content required' });
+
+    const result = await pool.query(
+      'INSERT INTO "ConversationComment" ("conversationId", "userId", content) VALUES ($1, $2, $3) RETURNING *',
+      [req.params.id, req.user.id, content]
+    );
+    res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

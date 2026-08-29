@@ -14,6 +14,9 @@ import ArtifactPanel from '../components/ArtifactPanel';
 import ExportMenu from '../components/ExportMenu';
 import SummaryCard from '../components/SummaryCard';
 import PromptTemplates from '../components/PromptTemplates';
+import ImageGenerator from '../components/ImageGenerator';
+import CodeRunner from '../components/CodeRunner';
+import ConversationComments from '../components/ConversationComments';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
 import { ArrowLeft, Paperclip, Share2, Copy, Check, ExternalLink, Square, Code } from 'lucide-react';
@@ -266,8 +269,11 @@ export default function AgentChat() {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="px-5 py-2 border-t border-gray-100 dark:border-gray-800">
+          <div className="px-5 py-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-2">
             <PromptTemplates onSelect={(prompt) => setInput(prompt.replace('{input}', ''))} />
+            <ImageGenerator />
+            <CodeRunner />
+            {currentConvId && <ConversationComments conversationId={currentConvId} />}
           </div>
 
           <ChatInput

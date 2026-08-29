@@ -15,6 +15,9 @@ import ExportMenu from '../components/ExportMenu';
 import BranchSelector from '../components/BranchSelector';
 import SummaryCard from '../components/SummaryCard';
 import PromptTemplates from '../components/PromptTemplates';
+import ImageGenerator from '../components/ImageGenerator';
+import CodeRunner from '../components/CodeRunner';
+import ConversationComments from '../components/ConversationComments';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
 import { Sparkles, Square, Code, Keyboard } from 'lucide-react';
@@ -261,6 +264,9 @@ export default function Chat() {
           <div className="px-5 py-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <PromptTemplates onSelect={handleTemplateSelect} />
+              <ImageGenerator />
+              <CodeRunner />
+              {currentConvId && <ConversationComments conversationId={currentConvId} />}
               <button
                 onClick={() => setShowShortcuts(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
