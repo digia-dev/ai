@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import MessageBubble from '../components/MessageBubble';
 import { SkeletonChat } from '../components/Skeleton';
 import { Paperclip, Share2 } from 'lucide-react';
+import Logo from '../components/Logo';
 
 interface SharedData {
   title: string;
@@ -59,9 +60,7 @@ export default function SharedResult() {
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <svg viewBox="0 0 32 32" className="w-5 h-5">
-                <path d="M16 2L28 16L16 30L4 16L16 2Z" fill="black"/>
-              </svg>
+              <Logo className="w-5 h-5" />
               <span className="font-bold text-sm">Tara AI</span>
             </div>
             <h1 className="text-sm font-semibold mt-1">{data?.title}</h1>

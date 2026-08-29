@@ -8,6 +8,7 @@ import { SkeletonPage } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 import { toast } from '../components/Toast';
 import { Plus, Copy } from 'lucide-react';
+import { AGENT_ICONS, getAgentIcon } from '../lib/agentIcons';
 
 interface Agent {
   id: number;
@@ -29,7 +30,6 @@ interface Tag {
   agentCount: number;
 }
 
-const ICONS = ['🤖', '📊', '📝', '💻', '🎯', '🔬', '📚', '✍️', '🔧', '🎨', '💡', '🚀'];
 const TAG_COLORS = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280'];
 
 export default function AgentManager() {
@@ -45,7 +45,7 @@ export default function AgentManager() {
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [filterTag, setFilterTag] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: '', icon: '🤖', model: 'deepseek/deepseek-v4-flash', temperature: 0.7, maxTokens: 4096, systemPrompt: '' });
+  const [form, setForm] = useState({ name: '', icon: 'bot', model: 'deepseek/deepseek-v4-flash', temperature: 0.7, maxTokens: 4096, systemPrompt: '' });
 
   const loadAgents = async () => {
     try {
@@ -68,7 +68,7 @@ export default function AgentManager() {
   const openCreate = () => {
     setEditAgent(null);
     setSelectedTags([]);
-    setForm({ name: '', icon: '🤖', model: 'deepseek/deepseek-v4-flash', temperature: 0.7, maxTokens: 4096, systemPrompt: '' });
+    setForm({ name: '', icon: 'bot', model: 'deepseek/deepseek-v4-flash', temperature: 0.7, maxTokens: 4096, systemPrompt: '' });
     setShowModal(true);
   };
 
@@ -157,7 +157,7 @@ export default function AgentManager() {
           {templates.map(a => (
             <div key={a.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-sm transition-shadow">
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-2xl">{a.icon}</span>
+                <span className="text-2xl">{getAgentIcon(a.icon, 'w-6 h-6')}</span>
                 <div>
                   <div className="font-semibold text-sm">{a.name}</div>
                   <div className="text-xs text-gray-500">{a.model}</div>
@@ -195,7 +195,7 @@ export default function AgentManager() {
         <div className="space-y-2">
           {filteredCustom.map(a => (
             <div key={a.id} className="border border-gray-200 rounded-xl p-4 flex items-center gap-4">
-              <span className="text-2xl">{a.icon}</span>
+              <span className="text-2xl">{getAgentIcon(a.icon, 'w-6 h-6')}</span>
               <div className="flex-1">
                 <div className="font-semibold text-sm">{a.name}</div>
                 <div className="text-xs text-gray-500">{a.model} · Temp: {a.temperature}</div>
@@ -231,8 +231,8 @@ export default function AgentManager() {
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">Icon</label>
             <div className="flex flex-wrap gap-1">
-              {ICONS.map(icon => (
-                <button key={icon} onClick={() => setForm(f => ({ ...f, icon }))} className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg transition-colors ${form.icon === icon ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>{icon}</button>
+              {AGENT_ICONS.map(ic => (
+                <button key={ic.name} onClick={() => setForm(f => ({ ...f, icon: ic.name }))} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${form.icon === ic.name ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`} title={ic.label}>{getAgentIcon(ic.name, 'w-4 h-4')}</button>
               ))}
             </div>
           </div>

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { formatTokens } from '../lib/constants';
 import ThemeToggle from './ThemeToggle';
+import Logo from './Logo';
+import { getAgentIcon } from '../lib/agentIcons';
 import {
   Plus,
   MessageSquare,
@@ -134,9 +136,7 @@ export default function Sidebar({
     <div className="w-[280px] bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full shrink-0">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <svg viewBox="0 0 32 32" className="w-6 h-6">
-            <path d="M16 2L28 16L16 30L4 16L16 2Z" fill="currentColor" className="text-black dark:text-white"/>
-          </svg>
+          <Logo className="w-6 h-6" />
           <span className="font-bold text-sm dark:text-white">Tara AI</span>
         </div>
         <div className="flex items-center gap-2">
@@ -220,7 +220,7 @@ export default function Sidebar({
                   currentPath === `/agents/${a.id}` ? 'bg-gray-100 dark:bg-gray-700 font-semibold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
-                <span>{a.icon}</span>
+                <span>{getAgentIcon(a.icon, 'w-4 h-4')}</span>
                 <span className="flex-1 truncate dark:text-gray-300">{a.name}</span>
               </div>
             ))}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { removeToken } from '../lib/auth';
+import { apiFetch } from '../lib/api';
 import Sidebar from './Sidebar';
 import { Menu } from 'lucide-react';
 
@@ -8,7 +9,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [conversations, setConversations] = useState<{ id: number; title: string }[]>([]);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+
+  const currentConvId = location.pathname === '/chat'
+    ? Number(new URLSearchParams(location.search).get('conversationId')) || null
+    : null;
+
+  const loadConversations = useCallback(() => {
+    apiFetch('/api/conversations').then(r => r.ok ? r.json() : []).then(setConversations).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadConversations();
+    window.addEventListener('conversations-updated', loadConversations);
+    return () => window.removeEventListener('conversations-updated', loadConversations);
+  }, [loadConversations]);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -17,6 +33,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const handleLogout = () => {
     removeToken();
     navigate('/login');
+  };
+
+  const handleSelectConversation = (id: number) => {
+    navigate(`/chat?conversationId=${id}`);
+  };
+
+  const handleDeleteConversation = async (id: number) => {
+    await apiFetch(`/api/conversations/${id}`, { method: 'DELETE' });
+    loadConversations();
+    if (currentConvId === id) navigate('/chat');
   };
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
@@ -63,6 +89,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:relative md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <Sidebar
           currentPath={location.pathname}
+          conversations={conversations}
+          currentConvId={currentConvId}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={handleDeleteConversation}
           onNewChat={() => navigate('/chat')}
           onLogout={handleLogout}
         />

@@ -24,6 +24,7 @@ import LanguageToggle from '../components/LanguageToggle';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
 import { ArrowLeft, Paperclip, Share2, Copy, Check, ExternalLink, Square, Code } from 'lucide-react';
+import { getAgentIcon } from '../lib/agentIcons';
 
 interface Agent {
   id: number;
@@ -144,7 +145,7 @@ export default function AgentChat() {
         <button onClick={() => navigate('/agents')} className="text-gray-400 hover:text-black dark:hover:text-white">
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <span className="text-lg">{agent.icon}</span>
+        {getAgentIcon(agent.icon, 'w-5 h-5')}
         <div className="flex-1 flex items-center gap-2">
           <span className="text-sm font-semibold dark:text-white">{agent.name}</span>
           <span className="text-xs text-gray-400">{modelName}</span>
@@ -201,7 +202,7 @@ export default function AgentChat() {
           <div className="flex-1 overflow-y-auto px-5 py-5">
             {messages.length === 0 && (
               <div className="text-center py-20 max-w-md mx-auto">
-                <div className="text-4xl mb-4">{agent.icon}</div>
+                <div className="mb-4">{getAgentIcon(agent.icon, 'w-10 h-10')}</div>
                 <h2 className="text-xl font-bold mb-2 dark:text-white">{agent.name}</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Mulai percakapan dengan {agent.name}</p>
               </div>

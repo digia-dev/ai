@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { setToken } from '../lib/auth';
 import { apiFetch } from '../lib/api';
 import { Eye, EyeOff } from 'lucide-react';
+import Logo from '../components/Logo';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -44,9 +45,7 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center p-5 bg-white dark:bg-gray-900">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <svg viewBox="0 0 32 32" className="w-10 h-10 mx-auto mb-4">
-            <path d="M16 2L28 16L16 30L4 16L16 2Z" fill="currentColor" className="text-black dark:text-white"/>
-          </svg>
+          <Logo className="w-10 h-10 mx-auto mb-4" />
           <h1 className="text-2xl font-bold dark:text-white">{isRegister ? 'Buat Akun' : 'Tara AI'}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {isRegister ? 'Gabung dengan ekosistem Giantara' : 'Asisten AI bertenaga Giantara'}
