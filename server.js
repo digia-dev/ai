@@ -22,7 +22,7 @@ if (!process.env.DB_PASS) {
 
 const pool = new pg.Pool({
   user: process.env.DB_USER || 'giantar1_tara',
-  password: process.env.DB_PASS,
+  password: process.env.DB_PASS || 'TaraAI2026Secure!',
   database: process.env.DB_NAME || 'giantar1_tara_ai',
   host: process.env.DB_HOST || '/var/run/postgresql',
 });
@@ -152,7 +152,7 @@ async function runMigrations() {
     client.release();
   }
 }
-runMigrations();
+runMigrations().catch(err => console.error('Migration startup error:', err.message));
 
 const distPath = path.join('/home/giantar1/ai', 'client', 'dist');
 const uploadsPath = path.join('/home/giantar1/ai', 'uploads');
