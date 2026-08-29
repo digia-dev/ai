@@ -1,11 +1,50 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import rehypeHighlight from 'rehype-highlight';
 import { Copy, Check } from 'lucide-react';
 
 interface MessageBubbleProps {
   role: string;
   content: string;
   createdAt?: string;
+}
+
+function CodeBlock({ children, className, ...props }: any) {
+  const [copied, setCopied] = useState(false);
+  const match = /language-(\w+)/.exec(className || '');
+  const language = match ? match[1] : '';
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(String(children));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (className) {
+    return (
+      <div className="relative group">
+        {language && (
+          <span className="absolute top-2 left-3 text-[10px] text-gray-400 font-mono">{language}</span>
+        )}
+        <button
+          onClick={handleCopy}
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-black transition-opacity p-1 rounded"
+          title="Salin kode"
+        >
+          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+        </button>
+        <pre className={className} {...props}>
+          {children}
+        </pre>
+      </div>
+    );
+  }
+
+  return (
+    <code className={className} {...props}>
+      {children}
+    </code>
+  );
 }
 
 export default function MessageBubble({ role, content, createdAt }: MessageBubbleProps) {
@@ -21,7 +60,7 @@ export default function MessageBubble({ role, content, createdAt }: MessageBubbl
   return (
     <div className={`flex gap-3 mb-6 group ${isUser ? 'justify-end' : 'justify-start'}`}>
       {!isUser && (
-        <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-1">
+        <div className="w-8 h-8 rounded-full bg-black dark:bg-gray-600 text-white dark:text-gray-200 flex items-center justify-center text-xs font-bold shrink-0 mt-1">
           T
         </div>
       )}
@@ -29,13 +68,22 @@ export default function MessageBubble({ role, content, createdAt }: MessageBubbl
       <div className={`max-w-[85%] relative ${isUser ? 'order-1' : ''}`}>
         <div className={`text-sm leading-relaxed px-4 py-3 ${
           isUser
-            ? 'bg-gray-100 text-black rounded-2xl rounded-br-md'
-            : 'prose prose-sm prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:bg-gray-100 prose-pre:p-3 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-code:text-sm prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-normal prose-strong:font-semibold prose-a:text-blue-600 prose-a:underline prose-table:border-collapse prose-th:border prose-th:border-gray-200 prose-th:px-3 prose-th:py-1.5 prose-th:text-left prose-td:border prose-td:border-gray-200 prose-td:px-3 prose-td:py-1.5'
+            ? 'bg-gray-100 dark:bg-gray-700 text-black dark:text-white rounded-2xl rounded-br-md'
+            : 'prose prose-sm dark:prose-invert prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:bg-gray-100 dark:prose-pre:bg-gray-800 prose-pre:p-3 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-code:text-sm prose-code:bg-gray-100 dark:prose-code:bg-gray-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-normal prose-strong:font-semibold prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-a:underline prose-table:border-collapse prose-th:border prose-th:border-gray-200 dark:prose-th:border-gray-600 prose-th:px-3 prose-th:py-1.5 prose-th:text-left prose-td:border prose-td:border-gray-200 dark:prose-td:border-gray-600 prose-td:px-3 prose-td:py-1.5'
         }`}>
           {isUser ? (
             <span className="whitespace-pre-wrap">{content}</span>
           ) : (
-            <ReactMarkdown>{content}</ReactMarkdown>
+            <ReactMarkdown
+              rehypePlugins={[rehypeHighlight]}
+              components={{
+                pre: ({ children, ...props }) => (
+                  <CodeBlock {...props}>{children}</CodeBlock>
+                ),
+              }}
+            >
+              {content}
+            </ReactMarkdown>
           )}
         </div>
 

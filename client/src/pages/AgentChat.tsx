@@ -4,10 +4,11 @@ import { apiFetch } from '../lib/api';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
 import MessageBubble from '../components/MessageBubble';
+import StreamingBubble from '../components/StreamingBubble';
 import ChatInput from '../components/ChatInput';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
-import { ArrowLeft, Paperclip, Share2, Copy, Check, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Paperclip, Share2, Copy, Check, ExternalLink, Square } from 'lucide-react';
 
 interface Agent {
   id: number;
@@ -28,8 +29,8 @@ export default function AgentChat() {
   const [copied, setCopied] = useState(false);
 
   const {
-    currentConvId, messages, loading, messagesEndRef,
-    loadConversations, sendMessage,
+    currentConvId, messages, loading, streamingContent, isStreaming, messagesEndRef,
+    loadConversations, sendMessage, stopGeneration,
   } = useChat({ agentId: agentId ? Number(agentId) : undefined });
 
   const [input, setInput] = useState('');
@@ -56,7 +57,7 @@ export default function AgentChat() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streamingContent]);
 
   const handleSend = async (text?: string) => {
     const msg = text || input.trim();
@@ -97,35 +98,43 @@ export default function AgentChat() {
 
   return (
     <>
-      <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-3">
-        <button onClick={() => navigate('/agents')} className="text-gray-400 hover:text-black">
+      <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+        <button onClick={() => navigate('/agents')} className="text-gray-400 hover:text-black dark:hover:text-white">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <span className="text-lg">{agent.icon}</span>
-        <div className="flex-1">
-          <span className="text-sm font-semibold">{agent.name}</span>
-          <span className="text-xs text-gray-400 ml-2">{modelName}</span>
+        <div className="flex-1 flex items-center gap-2">
+          <span className="text-sm font-semibold dark:text-white">{agent.name}</span>
+          <span className="text-xs text-gray-400">{modelName}</span>
+          {isStreaming && (
+            <button
+              onClick={stopGeneration}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <Square className="w-3 h-3" />
+              Hentikan
+            </button>
+          )}
         </div>
-        <button onClick={handleShare} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 text-gray-600" title="Bagikan hasil">
+        <button onClick={handleShare} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" title="Bagikan hasil">
           <Share2 className="w-3 h-3" /> Bagikan
         </button>
       </div>
 
-      {/* Share Menu Dropdown */}
       {showShareMenu && shareLink && (
-        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-          <input readOnly value={shareLink} className="flex-1 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs outline-none" />
-          <button onClick={copyLink} className="flex items-center gap-1 px-3 py-1.5 bg-black text-white rounded-lg text-xs hover:bg-gray-800">
+        <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center gap-2">
+          <input readOnly value={shareLink} className="flex-1 px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs outline-none dark:text-white" />
+          <button onClick={copyLink} className="flex items-center gap-1 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-lg text-xs hover:bg-gray-800 dark:hover:bg-gray-200">
             {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
             {copied ? 'Tersalin' : 'Salin'}
           </button>
           <button onClick={shareWhatsApp} className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs hover:bg-green-600">
             WhatsApp
           </button>
-          <button onClick={() => { window.open(shareLink, '_blank'); }} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">
+          <button onClick={() => { window.open(shareLink, '_blank'); }} className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300">
             <ExternalLink className="w-3 h-3" /> Buka
           </button>
-          <button onClick={() => setShowShareMenu(false)} className="text-gray-400 hover:text-black text-xs">✕</button>
+          <button onClick={() => setShowShareMenu(false)} className="text-gray-400 hover:text-black dark:hover:text-white text-xs">✕</button>
         </div>
       )}
 
@@ -133,37 +142,53 @@ export default function AgentChat() {
         {messages.length === 0 && (
           <div className="text-center py-20 max-w-md mx-auto">
             <div className="text-4xl mb-4">{agent.icon}</div>
-            <h2 className="text-xl font-bold mb-2">{agent.name}</h2>
-            <p className="text-sm text-gray-500">Mulai percakapan dengan {agent.name}</p>
+            <h2 className="text-xl font-bold mb-2 dark:text-white">{agent.name}</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Mulai percakapan dengan {agent.name}</p>
           </div>
         )}
 
-        {messages.map(m => (
-          <div key={m.id}>
-            <MessageBubble role={m.role} content={m.content} createdAt={m.createdAt} />
-            {m.outputFiles && m.outputFiles.length > 0 && (
-              <div className="flex gap-2 flex-wrap mb-4 pl-11">
-                {m.outputFiles.map((f: any, i: number) => (
-                  <a key={i} href={f.downloadUrl} className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 rounded-lg text-xs hover:bg-gray-200 transition-colors">
-                    <Paperclip className="w-3 h-3" /> {f.name}
-                    <span className="text-gray-400">({(f.size / 1024).toFixed(1)} KB)</span>
-                  </a>
-                ))}
+        {messages.map(m => {
+          if (m.role === 'assistant' && isStreaming && m.content === '' && streamingContent) {
+            return (
+              <div key={m.id}>
+                <StreamingBubble content={streamingContent} />
               </div>
-            )}
-          </div>
-        ))}
-
-        {loading && (
-          <div className="flex gap-3 max-w-2xl mx-auto mb-4">
-            <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0">{agent.icon}</div>
-            <div className="flex gap-1 pt-2">
-              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-blink" style={{ animationDelay: '0s' }} />
-              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-blink" style={{ animationDelay: '0.2s' }} />
-              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-blink" style={{ animationDelay: '0.4s' }} />
+            );
+          }
+          if (m.role === 'assistant' && isStreaming && m.id === messages[messages.length - 1]?.id && streamingContent) {
+            return (
+              <div key={m.id}>
+                <StreamingBubble content={streamingContent} />
+                {m.outputFiles && m.outputFiles.length > 0 && (
+                  <div className="flex gap-2 flex-wrap mb-4 pl-11">
+                    {m.outputFiles.map((f: any, i: number) => (
+                      <a key={i} href={f.downloadUrl} className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 rounded-lg text-xs hover:bg-gray-200 transition-colors">
+                        <Paperclip className="w-3 h-3" /> {f.name}
+                        <span className="text-gray-400">({(f.size / 1024).toFixed(1)} KB)</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          }
+          return (
+            <div key={m.id}>
+              <MessageBubble role={m.role} content={m.content} createdAt={m.createdAt} />
+              {m.outputFiles && m.outputFiles.length > 0 && (
+                <div className="flex gap-2 flex-wrap mb-4 pl-11">
+                  {m.outputFiles.map((f: any, i: number) => (
+                    <a key={i} href={f.downloadUrl} className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors dark:text-gray-300">
+                      <Paperclip className="w-3 h-3" /> {f.name}
+                      <span className="text-gray-400">({(f.size / 1024).toFixed(1)} KB)</span>
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })}
+
         <div ref={messagesEndRef} />
       </div>
 

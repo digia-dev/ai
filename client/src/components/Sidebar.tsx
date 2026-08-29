@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { formatTokens } from '../lib/constants';
+import ThemeToggle from './ThemeToggle';
 import {
   Plus,
   MessageSquare,
@@ -75,8 +76,8 @@ export default function Sidebar({
       onClick={onClick || (() => navigate(path))}
       className={`flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg transition-colors ${
         isActive(path)
-          ? 'bg-gray-100 font-semibold text-black'
-          : 'text-gray-600 hover:bg-gray-50 hover:text-black'
+          ? 'bg-gray-100 dark:bg-gray-700 font-semibold text-black dark:text-white'
+          : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-black dark:hover:text-white'
       }`}
     >
       {icon}
@@ -85,21 +86,24 @@ export default function Sidebar({
   );
 
   return (
-    <div className="w-[280px] bg-gray-50 border-r border-gray-200 flex flex-col h-full shrink-0">
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+    <div className="w-[280px] bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full shrink-0">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <svg viewBox="0 0 32 32" className="w-6 h-6">
-            <path d="M16 2L28 16L16 30L4 16L16 2Z" fill="black"/>
+            <path d="M16 2L28 16L16 30L4 16L16 2Z" fill="currentColor" className="text-black dark:text-white"/>
           </svg>
-          <span className="font-bold text-sm">Tara AI</span>
+          <span className="font-bold text-sm dark:text-white">Tara AI</span>
         </div>
-        <button
-          onClick={onNewChat}
-          className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-100"
-          title="Chat baru"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <button
+            onClick={onNewChat}
+            className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700"
+            title="Chat baru"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -113,13 +117,13 @@ export default function Sidebar({
                 key={c.id}
                 onClick={() => onSelectConversation?.(c.id, c.title)}
                 className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
-                  c.id === currentConvId ? 'bg-gray-100 font-semibold' : 'text-gray-500 hover:bg-gray-50'
+                  c.id === currentConvId ? 'bg-gray-100 dark:bg-gray-700 font-semibold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
-                <span className="flex-1 truncate">{c.title || 'Chat Baru'}</span>
+                <span className="flex-1 truncate dark:text-gray-300">{c.title || 'Chat Baru'}</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); onDeleteConversation?.(c.id); }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-black ml-2"
+                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-black dark:hover:text-white ml-2"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -128,11 +132,11 @@ export default function Sidebar({
           </div>
         )}
 
-        <div className="my-1 border-t border-gray-200" />
+        <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
 
         {/* Agents */}
         <div
-          className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
+          className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-black dark:hover:text-white transition-colors"
           onClick={() => toggleSection('agents')}
         >
           <Bot className="w-4 h-4" />
@@ -146,16 +150,16 @@ export default function Sidebar({
                 key={a.id}
                 onClick={() => navigate(`/agents/${a.id}`)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
-                  currentPath === `/agents/${a.id}` ? 'bg-gray-100 font-semibold' : 'text-gray-500 hover:bg-gray-50'
+                  currentPath === `/agents/${a.id}` ? 'bg-gray-100 dark:bg-gray-700 font-semibold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
                 <span>{a.icon}</span>
-                <span className="flex-1 truncate">{a.name}</span>
+                <span className="flex-1 truncate dark:text-gray-300">{a.name}</span>
               </div>
             ))}
             <div
               onClick={() => navigate('/agents')}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs cursor-pointer text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs cursor-pointer text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300"
             >
               <Plus className="w-3 h-3" />
               <span>Buat Agent Baru</span>
@@ -163,16 +167,16 @@ export default function Sidebar({
           </div>
         )}
 
-        <div className="my-1 border-t border-gray-200" />
+        <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
 
         {/* Collection */}
         {navItem('/collection', <Folder className="w-4 h-4" />, 'Koleksi')}
 
-        <div className="my-1 border-t border-gray-200" />
+        <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
 
         {/* Account */}
         <div
-          className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
+          className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-black dark:hover:text-white transition-colors"
           onClick={() => toggleSection('account')}
         >
           <User className="w-4 h-4" />
@@ -186,7 +190,7 @@ export default function Sidebar({
             {navItem('/account/history', <BarChart3 className="w-4 h-4" />, 'Riwayat Penggunaan')}
             <div
               onClick={onLogout}
-              className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+              className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
               <LogOut className="w-4 h-4" />
               <span>Keluar</span>
@@ -194,22 +198,22 @@ export default function Sidebar({
           </div>
         )}
 
-        <div className="my-1 border-t border-gray-200" />
+        <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
 
         {/* Sources */}
         {navItem('/sources', <FileText className="w-4 h-4" />, 'Sumber')}
       </div>
 
       {/* Token Balance */}
-      <div className="p-3 border-t border-gray-200">
-        <div className="bg-white border border-gray-200 rounded-lg p-3">
+      <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
           <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-gray-500 flex items-center gap-1"><Zap className="w-3 h-3" /> Token tersisa</span>
-            <span className="font-semibold">{formatTokens(tokenBalance)}</span>
+            <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1"><Zap className="w-3 h-3" /> Token tersisa</span>
+            <span className="font-semibold dark:text-white">{formatTokens(tokenBalance)}</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-1.5">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
             <div
-              className="bg-black h-1.5 rounded-full transition-all"
+              className="bg-black dark:bg-white h-1.5 rounded-full transition-all"
               style={{ width: `${Math.min(100, (tokenBalance / 10000) * 100)}%` }}
             />
           </div>

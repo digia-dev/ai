@@ -507,6 +507,280 @@ ATURAN:
   }
 });
 
+// ============ CHAT STREAMING (SSE) ============
+
+app.post('/api/chat/stream', auth, async (req, res) => {
+  try {
+    const { conversationId, message } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message required' });
+
+    let convId = conversationId;
+    if (!convId) {
+      const result = await pool.query(
+        'INSERT INTO "Conversation" ("userId", title) VALUES ($1, $2) RETURNING id',
+        [req.user.id, message.slice(0, 50)]
+      );
+      convId = result.rows[0].id;
+    }
+
+    await pool.query(
+      'INSERT INTO "Message" ("conversationId", role, content) VALUES ($1, $2, $3)',
+      [convId, 'user', message]
+    );
+
+    const sources = await pool.query(
+      'SELECT name, content FROM "Source" WHERE "userId" = $1 LIMIT 5',
+      [req.user.id]
+    );
+
+    const systemPrompt = `Kamu adalah Tara, asisten AI yang membantu pengguna Giantara ecosystem.
+
+IDENTITAS:
+- Nama: Tara
+- Bahasa: Indonesia & English
+- Sifat: Ramah, profesional, membantu
+
+KAPABILITAS:
+1. Mengelola domain giantara.web.id
+2. Menganalisis dokumen yang diupload
+3. Membuat reminder dari #input commands
+
+ATURAN:
+- Selalu respon dalam JSON format
+- Jika permintaan ambigu, tampilkan pilihan (clarification)
+- Gunakan citation jika menjawab dari dokumen
+- Jangan pernah mengarang informasi`;
+
+    const contextMessages = [{ role: 'system', content: systemPrompt }];
+
+    if (sources.rows.length > 0) {
+      const sourceContext = sources.rows.map(s => `[${s.name}]: ${s.content?.slice(0, 2000) || ''}`).join('\n\n');
+      contextMessages.push({ role: 'system', content: `Dokumen yang tersedia:\n${sourceContext}` });
+    }
+
+    const history = await pool.query(
+      'SELECT role, content FROM "Message" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC LIMIT 20',
+      [convId]
+    );
+    contextMessages.push(...history.rows.map(m => ({ role: m.role, content: m.content })));
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const aiResponse = await fetch(process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.APP_URL || 'https://ai.giantara.web.id',
+        'X-Title': 'Tara AI',
+      },
+      body: JSON.stringify({
+        model: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat-v4-0324',
+        messages: contextMessages,
+        temperature: 0.7,
+        max_tokens: 4096,
+        stream: true,
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      const errText = await aiResponse.text();
+      res.write(`event: error\ndata: ${JSON.stringify({ error: `AI error ${aiResponse.status}: ${errText}` })}\n\n`);
+      res.end();
+      return;
+    }
+
+    let fullContent = '';
+    const reader = aiResponse.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const chunk = parsed.choices?.[0]?.delta?.content;
+          if (chunk) {
+            fullContent += chunk;
+            res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+          }
+        } catch {}
+      }
+    }
+
+    const files = await extractAndSaveFiles(fullContent, req.user.id, null, convId);
+
+    await pool.query(
+      'INSERT INTO "Message" ("conversationId", role, content) VALUES ($1, $2, $3)',
+      [convId, 'assistant', fullContent]
+    );
+    await pool.query('UPDATE "Conversation" SET "updatedAt" = NOW() WHERE id = $1', [convId]);
+
+    res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files })}\n\n`);
+    res.end();
+  } catch (err) {
+    try {
+      res.write(`event: error\ndata: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
+    } catch {}
+  }
+});
+
+app.post('/api/agents/chat/stream', auth, async (req, res) => {
+  try {
+    const { agentId, conversationId, message } = req.body;
+    if (!message || !agentId) return res.status(400).json({ error: 'Agent ID and message required' });
+
+    const billing = await pool.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1', [req.user.id]);
+    if (!billing.rows[0] || billing.rows[0].tokenBalance <= 0) {
+      return res.status(402).json({ error: 'Token habis', upgrade_url: '/account/billing' });
+    }
+
+    const agent = await pool.query(
+      'SELECT * FROM "Agent" WHERE id = $1 AND ("userId" = $2 OR "isDefault" = TRUE) AND "isActive" = TRUE',
+      [agentId, req.user.id]
+    );
+    if (!agent.rows[0]) return res.status(404).json({ error: 'Agent not found' });
+
+    const agentConfig = agent.rows[0];
+
+    let convId = conversationId;
+    if (!convId) {
+      const conv = await pool.query(
+        'INSERT INTO "AgentConversation" ("agentId", "userId", title) VALUES ($1, $2, $3) RETURNING id',
+        [agentId, req.user.id, message.slice(0, 50)]
+      );
+      convId = conv.rows[0].id;
+    }
+
+    await pool.query(
+      'INSERT INTO "AgentMessage" ("conversationId", role, content) VALUES ($1, $2, $3)',
+      [convId, 'user', message]
+    );
+
+    const history = await pool.query(
+      'SELECT role, content FROM "AgentMessage" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC LIMIT 20',
+      [convId]
+    );
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const aiRes = await fetch(process.env.OPENROUTER_URL || 'https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.APP_URL || 'https://ai.giantara.web.id',
+        'X-Title': `Tara AI - ${agentConfig.name}`,
+      },
+      body: JSON.stringify({
+        model: agentConfig.model,
+        messages: [
+          { role: 'system', content: agentConfig.systemPrompt },
+          ...history.rows,
+          { role: 'user', content: message }
+        ],
+        temperature: agentConfig.temperature,
+        max_tokens: agentConfig.maxTokens || 4096,
+        stream: true,
+      }),
+    });
+
+    if (!aiRes.ok) {
+      const errText = await aiRes.text();
+      res.write(`event: error\ndata: ${JSON.stringify({ error: `AI error ${aiRes.status}: ${errText}` })}\n\n`);
+      res.end();
+      return;
+    }
+
+    let fullContent = '';
+    const reader = aiRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const chunk = parsed.choices?.[0]?.delta?.content;
+          if (chunk) {
+            fullContent += chunk;
+            res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+          }
+        } catch {}
+      }
+    }
+
+    const files = await extractAndSaveFiles(fullContent, req.user.id, agentId, convId);
+    const tokensUsed = 0;
+
+    await pool.query(
+      'INSERT INTO "AgentMessage" ("conversationId", role, content, "outputFiles", "tokensUsed") VALUES ($1, $2, $3, $4, $5)',
+      [convId, 'assistant', fullContent, JSON.stringify(files), tokensUsed]
+    );
+    await pool.query('UPDATE "AgentConversation" SET "updatedAt" = NOW() WHERE id = $1', [convId]);
+
+    if (tokensUsed > 0) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
+        const newBalance = Math.max(0, (bal.rows[0]?.tokenBalance || 0) - tokensUsed);
+        await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
+        await client.query(
+          'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+          [req.user.id, 'usage', tokensUsed, newBalance, `Agent chat: ${agentConfig.name}`]
+        );
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+      } finally {
+        client.release();
+      }
+    }
+
+    res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files })}\n\n`);
+    res.end();
+  } catch (err) {
+    try {
+      res.write(`event: error\ndata: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
+    } catch {}
+  }
+});
+
 // ============ SOURCES ============
 
 app.get('/api/sources', auth, async (req, res) => {
