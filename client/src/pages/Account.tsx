@@ -51,45 +51,45 @@ export default function Account() {
       <div className="max-w-2xl mx-auto px-5 py-6">
         <h1 className="text-xl font-bold mb-6">Profil</h1>
 
-        <div className="border border-gray-200 rounded-xl p-5 mb-6">
-          <h2 className="font-semibold text-sm mb-4">Informasi Akun</h2>
+        <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-6">
+          <h2 className="font-semibold text-sm mb-4 dark:text-white">Informasi Akun</h2>
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Nama</label>
-              <input value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-black" />
+              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Nama</label>
+              <input value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:border-black dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-black dark:text-white" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Email</label>
-              <input value={email} onChange={e => setEmail(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-black" />
+              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:border-black dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-black dark:text-white" />
             </div>
-            <button onClick={saveProfile} disabled={saving} className="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800 disabled:opacity-50">
+            <button onClick={saveProfile} disabled={saving} className="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50">
               {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
             </button>
           </div>
         </div>
 
-        <div className="border border-gray-200 rounded-xl p-5">
-          <h2 className="font-semibold text-sm mb-4">Ubah Password</h2>
+        <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+          <h2 className="font-semibold text-sm mb-4 dark:text-white">Ubah Password</h2>
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Password saat ini</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Password saat ini</label>
               <div className="relative">
-                <input type={showCurrentPass ? 'text' : 'password'} value={currentPass} onChange={e => setCurrentPass(e.target.value)} className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm outline-none focus:border-black" />
-                <button onClick={() => setShowCurrentPass(!showCurrentPass)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">
+                <input type={showCurrentPass ? 'text' : 'password'} value={currentPass} onChange={e => setCurrentPass(e.target.value)} className="w-full px-3 py-2 pr-10 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:border-black dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-black dark:text-white" />
+                <button onClick={() => setShowCurrentPass(!showCurrentPass)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white">
                   {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Password baru</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Password baru</label>
               <div className="relative">
-                <input type={showNewPass ? 'text' : 'password'} value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm outline-none focus:border-black" />
-                <button onClick={() => setShowNewPass(!showNewPass)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">
+                <input type={showNewPass ? 'text' : 'password'} value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full px-3 py-2 pr-10 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:border-black dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-black dark:text-white" />
+                <button onClick={() => setShowNewPass(!showNewPass)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white">
                   {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
-            <button onClick={changePassword} className="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800">Ubah Password</button>
+            <button onClick={changePassword} className="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-200">Ubah Password</button>
           </div>
         </div>
       </div>

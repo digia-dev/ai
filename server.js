@@ -640,12 +640,15 @@ app.post('/api/auth/register', rateLimit(5, 300000), async (req, res) => {
       [userId, 'trial', 10000, 10000, 'Trial bonus: 10,000 token']
     );
 
-    // Create default agents
-    for (const agent of DEFAULT_AGENTS) {
-      await pool.query(
-        'INSERT INTO "Agent" ("userId", name, icon, "systemPrompt", model, temperature, "isDefault", "isTemplate") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-        [userId, agent.name, agent.icon, agent.systemPrompt, agent.model, agent.temperature, agent.isDefault, agent.isTemplate]
-      );
+    // Create default agents (skip if user already has them)
+    const existingAgents = await pool.query('SELECT id FROM "Agent" WHERE "userId" = $1 LIMIT 1', [userId]);
+    if (existingAgents.rows.length === 0) {
+      for (const agent of DEFAULT_AGENTS) {
+        await pool.query(
+          'INSERT INTO "Agent" ("userId", name, icon, "systemPrompt", model, temperature, "isDefault", "isTemplate") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+          [userId, agent.name, agent.icon, agent.systemPrompt, agent.model, agent.temperature, agent.isDefault, agent.isTemplate]
+        );
+      }
     }
 
     const token = jwt.sign({ id: userId, email, name }, JWT_SECRET, { expiresIn: '7d' });
@@ -1976,13 +1979,13 @@ app.delete('/api/sources/:id', auth, async (req, res) => {
 app.get('/api/agents', auth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT a.id, a.name, a.icon, a.model, a.temperature, a."maxTokens", a."isDefault", a."isTemplate", a."systemPrompt",
+      `SELECT DISTINCT ON (a.name, a."isDefault") a.id, a.name, a.icon, a.model, a.temperature, a."maxTokens", a."isDefault", a."isTemplate", a."systemPrompt",
        COALESCE(json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color)) FILTER (WHERE t.id IS NOT NULL), '[]') as tags
        FROM "Agent" a
        LEFT JOIN "AgentTag" at2 ON a.id = at2."agentId"
        LEFT JOIN "Tag" t ON at2."tagId" = t.id
        WHERE (a."userId" = $1 OR a."isDefault" = TRUE) AND a."isActive" = TRUE
-       GROUP BY a.id ORDER BY a."isDefault" DESC, a.name ASC`,
+       GROUP BY a.id, a.name, a."isDefault" ORDER BY a.name ASC, a."isDefault" DESC, a.id ASC`,
       [req.user.id]
     );
     res.json(result.rows);

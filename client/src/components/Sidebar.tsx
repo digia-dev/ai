@@ -169,21 +169,21 @@ export default function Sidebar({
         {/* Chat */}
         {navItem('/chat', <MessageSquare className="w-4 h-4" />, 'Chat', () => { onNewChat(); navigate('/chat'); })}
 
-        {displayConversations.length > 0 && currentPath === '/chat' && (
+            {displayConversations.length > 0 && currentPath === '/chat' && (
           <div className="ml-4 space-y-0.5 mb-2">
             {displayConversations.map((c) => (
               <div
                 key={c.id}
                 onClick={() => onSelectConversation?.(c.id, c.title)}
-                className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
+                className={`group flex items-center justify-between px-3 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
                   c.id === currentConvId ? 'bg-gray-100 dark:bg-gray-700 font-semibold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
                 <span className="flex-1 truncate dark:text-gray-300">{c.title || 'Chat Baru'}</span>
-                {!isSearching && (
+                {!isSearching && onDeleteConversation && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); onDeleteConversation?.(c.id); }}
-                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-black dark:hover:text-white ml-2"
+                    onClick={(e) => { e.stopPropagation(); onDeleteConversation(c.id); }}
+                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 dark:hover:text-red-400 ml-2 transition-opacity"
                   >
                     <X className="w-3 h-3" />
                   </button>

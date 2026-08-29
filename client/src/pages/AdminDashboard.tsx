@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiFetch } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from '../hooks/useTranslation';
 import { Users, MessageSquare, Coins, Bot, Shield, Activity, Ban, CheckCircle, ArrowLeft, Server, BarChart3 } from 'lucide-react';
 
 interface Stats {
@@ -33,15 +34,31 @@ interface Health {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'stats' | 'users' | 'health'>('stats');
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
-    loadData();
-  }, [tab]);
+    apiFetch('/api/account/profile')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.isAdmin) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+          navigate('/chat');
+        }
+      })
+      .catch(() => { setIsAdmin(false); navigate('/chat'); });
+  }, [navigate]);
+
+  useEffect(() => {
+    if (isAdmin) loadData();
+  }, [tab, isAdmin]);
 
   const loadData = async () => {
     setLoading(true);
@@ -91,6 +108,14 @@ export default function AdminDashboard() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
+  if (isAdmin === false) return null;
+
+  const tabLabels: Record<string, string> = {
+    stats: t('admin.stats'),
+    users: t('admin.users'),
+    health: t('admin.health'),
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-6xl mx-auto px-4 py-6">
@@ -101,51 +126,51 @@ export default function AdminDashboard() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 dark:text-white">
             <Shield className="w-6 h-6" />
-            Admin Dashboard
+            {t('admin.dashboard')}
           </h1>
         </div>
 
-        <div className="flex gap-2 mb-6">
-          {(['stats', 'users', 'health'] as const).map((t) => (
+        <div className="flex gap-2 mb-6 overflow-x-auto">
+          {(['stats', 'users', 'health'] as const).map((key) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === t
+              key={key}
+              onClick={() => setTab(key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors shrink-0 ${
+                tab === key
                   ? 'bg-blue-600 text-white'
                   : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
             >
-              {t === 'stats' && <BarChart3 className="w-4 h-4 inline mr-1" />}
-              {t === 'users' && <Users className="w-4 h-4 inline mr-1" />}
-              {t === 'health' && <Activity className="w-4 h-4 inline mr-1" />}
-              {t.charAt(0).toUpperCase() + t.slice(1)}
+              {key === 'stats' && <BarChart3 className="w-4 h-4 inline mr-1" />}
+              {key === 'users' && <Users className="w-4 h-4 inline mr-1" />}
+              {key === 'health' && <Activity className="w-4 h-4 inline mr-1" />}
+              {tabLabels[key]}
             </button>
           ))}
         </div>
 
         {loading ? (
-          <div className="text-center py-12 text-gray-400">Loading...</div>
+          <div className="text-center py-12 text-gray-400">{t('admin.loading')}</div>
         ) : tab === 'stats' && stats ? (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <StatCard icon={<Users className="w-5 h-5" />} label="Users" value={stats.users} />
-            <StatCard icon={<MessageSquare className="w-5 h-5" />} label="Conversations" value={stats.conversations} />
-            <StatCard icon={<MessageSquare className="w-5 h-5" />} label="Messages" value={stats.messages} />
-            <StatCard icon={<Coins className="w-5 h-5" />} label="Tokens" value={stats.totalTokens} />
-            <StatCard icon={<Bot className="w-5 h-5" />} label="Agents" value={stats.agents} />
+            <StatCard icon={<Users className="w-5 h-5" />} label={t('admin.users')} value={stats.users} />
+            <StatCard icon={<MessageSquare className="w-5 h-5" />} label={t('admin.conversations')} value={stats.conversations} />
+            <StatCard icon={<MessageSquare className="w-5 h-5" />} label={t('admin.messages')} value={stats.messages} />
+            <StatCard icon={<Coins className="w-5 h-5" />} label={t('admin.tokens')} value={stats.totalTokens} />
+            <StatCard icon={<Bot className="w-5 h-5" />} label={t('admin.agents')} value={stats.agents} />
           </div>
         ) : tab === 'users' ? (
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <table className="w-full">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-x-auto">
+            <table className="w-full min-w-[600px]">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">User</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Conversations</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Messages</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Tokens</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('admin.users.title')}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('admin.conversations')}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('admin.messages')}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('admin.tokens')}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('admin.status')}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Actions</th>
                 </tr>
               </thead>
@@ -154,20 +179,20 @@ export default function AdminDashboard() {
                   <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-4 py-3">
                       <div>
-                        <div className="font-medium text-sm">{u.name || u.email}</div>
+                        <div className="font-medium text-sm dark:text-white">{u.name || u.email}</div>
                         <div className="text-xs text-gray-400">{u.email}</div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm">{u.conversationCount}</td>
-                    <td className="px-4 py-3 text-sm">{u.messageCount}</td>
-                    <td className="px-4 py-3 text-sm">{u.tokenBalance.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-sm dark:text-gray-300">{u.conversationCount}</td>
+                    <td className="px-4 py-3 text-sm dark:text-gray-300">{u.messageCount}</td>
+                    <td className="px-4 py-3 text-sm dark:text-gray-300">{u.tokenBalance.toLocaleString()}</td>
                     <td className="px-4 py-3">
                       {u.banned ? (
-                        <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">Banned</span>
+                        <span className="px-2 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full">{t('admin.banned')}</span>
                       ) : u.isAdmin ? (
-                        <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-full">Admin</span>
+                        <span className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full">{t('admin.admin')}</span>
                       ) : (
-                        <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">Active</span>
+                        <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full">{t('admin.active')}</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -204,46 +229,46 @@ export default function AdminDashboard() {
         ) : tab === 'health' && health ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-              <h3 className="font-semibold mb-4 flex items-center gap-2">
-                <Server className="w-5 h-5" /> System
+              <h3 className="font-semibold mb-4 flex items-center gap-2 dark:text-white">
+                <Server className="w-5 h-5" /> {t('admin.system')}
               </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Status</span>
+                  <span className="text-gray-500 dark:text-gray-400">{t('admin.status')}</span>
                   <span className="font-medium text-green-600">{health.status}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Database</span>
+                  <span className="text-gray-500 dark:text-gray-400">{t('admin.database')}</span>
                   <span className={`font-medium ${health.database === 'connected' ? 'text-green-600' : 'text-red-600'}`}>
                     {health.database}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Node.js</span>
-                  <span className="font-medium">{health.nodeVersion}</span>
+                  <span className="text-gray-500 dark:text-gray-400">Node.js</span>
+                  <span className="font-medium dark:text-white">{health.nodeVersion}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Uptime</span>
-                  <span className="font-medium">{Math.floor(health.uptime / 3600)}h {Math.floor((health.uptime % 3600) / 60)}m</span>
+                  <span className="text-gray-500 dark:text-gray-400">{t('admin.uptime')}</span>
+                  <span className="font-medium dark:text-white">{Math.floor(health.uptime / 3600)}h {Math.floor((health.uptime % 3600) / 60)}m</span>
                 </div>
               </div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-              <h3 className="font-semibold mb-4 flex items-center gap-2">
-                <Activity className="w-5 h-5" /> Memory
+              <h3 className="font-semibold mb-4 flex items-center gap-2 dark:text-white">
+                <Activity className="w-5 h-5" /> {t('admin.memory')}
               </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">RSS</span>
-                  <span className="font-medium">{formatBytes(health.memory.rss)}</span>
+                  <span className="text-gray-500 dark:text-gray-400">RSS</span>
+                  <span className="font-medium dark:text-white">{formatBytes(health.memory.rss)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Heap Used</span>
-                  <span className="font-medium">{formatBytes(health.memory.heapUsed)}</span>
+                  <span className="text-gray-500 dark:text-gray-400">Heap Used</span>
+                  <span className="font-medium dark:text-white">{formatBytes(health.memory.heapUsed)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Heap Total</span>
-                  <span className="font-medium">{formatBytes(health.memory.heapTotal)}</span>
+                  <span className="text-gray-500 dark:text-gray-400">Heap Total</span>
+                  <span className="font-medium dark:text-white">{formatBytes(health.memory.heapTotal)}</span>
                 </div>
               </div>
             </div>
@@ -258,7 +283,7 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
       <div className="flex items-center gap-2 text-gray-400 mb-2">{icon}</div>
-      <div className="text-2xl font-bold">{value.toLocaleString()}</div>
+      <div className="text-2xl font-bold dark:text-white">{value.toLocaleString()}</div>
       <div className="text-xs text-gray-500">{label}</div>
     </div>
   );

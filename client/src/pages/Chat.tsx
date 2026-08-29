@@ -104,14 +104,14 @@ export default function Chat() {
 
   const handleRegenerate = async () => {
     if (!currentConvId || loading) return;
-    setChatTitle('Regenerasi...');
+    setChatTitle(t('chat.regenerating'));
     await regenerateMessage(currentConvId);
   };
 
   const handleEdit = async (msgId: number, newContent: string) => {
     if (!currentConvId || loading) return;
     setEditingMsgId(null);
-    setChatTitle('Edit & regenerate...');
+    setChatTitle(t('chat.editing'));
     await editMessage(currentConvId, msgId, newContent);
   };
 
@@ -276,7 +276,7 @@ export default function Chat() {
           </div>
 
           <div className="px-5 py-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto flex-1 min-w-0">
               <PromptTemplates onSelect={handleTemplateSelect} />
               <ImageGenerator />
               <CodeRunner />
@@ -285,21 +285,21 @@ export default function Chat() {
               <ModelCompare />
               <button
                 onClick={() => setShowAnalytics(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                className="flex items-center gap-1 px-2 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors shrink-0"
                 title={t('chat.analytics')}
               >
                 <BarChart3 className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setShowWebhooks(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                className="flex items-center gap-1 px-2 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors shrink-0"
                 title={t('chat.webhooks')}
               >
                 <Webhook className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setShowShortcuts(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                className="flex items-center gap-1 px-2 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors shrink-0"
                 title={t('chat.shortcuts')}
               >
                 <Keyboard className="w-3.5 h-3.5" />
@@ -340,12 +340,12 @@ export default function Chat() {
       {showShortcuts && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowShortcuts(false)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold mb-4 dark:text-white">Keyboard Shortcuts</h3>
+            <h3 className="text-sm font-semibold mb-4 dark:text-white">{t('chat.shortcuts')}</h3>
             <div className="space-y-2 text-xs">
-              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">Kirim pesan</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+Enter</kbd></div>
-              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">Chat baru</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+N</kbd></div>
-              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">Hentikan</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Esc</kbd></div>
-              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">Toggle shortcuts</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+K</kbd></div>
+              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">{t('chat.send')}</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+Enter</kbd></div>
+              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">{t('chat.new')}</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+N</kbd></div>
+              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">{t('chat.stop')}</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Esc</kbd></div>
+              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">{t('chat.shortcuts')}</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+K</kbd></div>
             </div>
             <button onClick={() => setShowShortcuts(false)} className="mt-4 w-full py-2 text-xs bg-black dark:bg-white text-white dark:text-black rounded-lg">Tutup</button>
           </div>
