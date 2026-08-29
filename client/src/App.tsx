@@ -50,7 +50,7 @@ export default function App() {
             <Route path="/account/history" element={<ProtectedRoute><AccountHistory /></ProtectedRoute>} />
             <Route path="/collection" element={<ProtectedRoute><Collection /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-            <Route path="*" element={<Navigate to="/chat" replace />} />
+            <Route path="*" element={<AppLayout><Chat /></AppLayout>} />
           </Routes>
         </ErrorBoundary>
         <AuthModal />

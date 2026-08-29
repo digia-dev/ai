@@ -13,7 +13,6 @@ import ClarificationCard from '../components/ClarificationCard';
 import CitationsCard from '../components/CitationsCard';
 import RelatedQuestions from '../components/RelatedQuestions';
 import SummaryCard from '../components/SummaryCard';
-import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
 import { Sparkles } from 'lucide-react';
 import { apiFetch } from '../lib/api';
@@ -38,7 +37,6 @@ export default function Chat() {
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [chatTitle, setChatTitle] = useState(t('chat.new'));
   const [uploading, setUploading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
   const [webSearch, setWebSearch] = useState(false);
 
@@ -63,7 +61,7 @@ export default function Chat() {
   });
 
   useEffect(() => {
-    loadConversations().finally(() => setInitialLoading(false));
+    loadConversations();
   }, []);
 
   useEffect(() => {
@@ -144,8 +142,6 @@ export default function Chat() {
     'Rencanakan meeting tim minggu depan',
     'Ceritakan tentang ekosistem Giantara',
   ];
-
-  if (initialLoading) return <SkeletonChat />;
 
   return (
     <div className="flex flex-col h-full">
