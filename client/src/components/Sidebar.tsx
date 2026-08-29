@@ -70,6 +70,12 @@ export default function Sidebar({
     apiFetch('/api/agents').then(r => r.ok ? r.json() : []).then(setAgents).catch(() => {});
     apiFetch('/api/account/billing').then(r => r.ok ? r.json() : null).then(d => { if (d) setTokenBalance(d.tokenBalance); }).catch(() => {});
     apiFetch('/api/account/profile').then(r => r.ok ? r.json() : null).then(d => { if (d?.isAdmin) setIsAdmin(true); }).catch(() => {});
+
+    const refreshBilling = () => {
+      apiFetch('/api/account/billing').then(r => r.ok ? r.json() : null).then(d => { if (d) setTokenBalance(d.tokenBalance); }).catch(() => {});
+    };
+    window.addEventListener('tokens-used', refreshBilling);
+    return () => window.removeEventListener('tokens-used', refreshBilling);
   }, []);
 
   const handleSearch = useCallback(async (query: string) => {

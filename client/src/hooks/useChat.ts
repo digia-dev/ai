@@ -346,7 +346,7 @@ export function useChat(options: UseChatOptions = {}) {
             : m
         ));
 
-        loadConversations();
+      loadConversations();
       }
     } catch (err: any) {
       setError(err.message);
@@ -365,7 +365,7 @@ export function useChat(options: UseChatOptions = {}) {
     }
   }, []);
 
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback(async (text: string, webSearch = false) => {
     if (!text.trim() || loading) return;
 
     setLoading(true);
@@ -402,7 +402,7 @@ export function useChat(options: UseChatOptions = {}) {
       const url = options.agentId ? '/api/agents/chat/stream' : '/api/chat/stream';
       const body = options.agentId
         ? { agentId: options.agentId, conversationId: currentConvId, message: text, focusMode }
-        : { conversationId: currentConvId, message: text, focusMode };
+        : { conversationId: currentConvId, message: text, focusMode, webSearch };
 
       const res = await apiFetchStream(url, {
         method: 'POST',
@@ -456,7 +456,7 @@ export function useChat(options: UseChatOptions = {}) {
                 finalRelatedQuestions = parsed.relatedQuestions || [];
                 setMessages(prev => prev.map(m =>
                   m.id === assistantMsgId
-                    ? { ...m, content: accumulated, outputFiles: parsed.files || [], conversationId: parsed.conversationId, citations: finalCitations, relatedQuestions: finalRelatedQuestions }
+                    ? { ...m, content: accumulated, outputFiles: parsed.files || [], conversationId: parsed.conversationId, citations: finalCitations, relatedQuestions: finalRelatedQuestions, tokensUsed: parsed.tokensUsed || 0 }
                     : m
                 ));
               }
@@ -489,6 +489,9 @@ export function useChat(options: UseChatOptions = {}) {
       ));
 
       loadConversations();
+
+      // Notify sidebar to refresh token balance
+      window.dispatchEvent(new Event('tokens-used'));
     } catch (err: any) {
       if (err.name === 'AbortError') {
         setMessages(prev => prev.filter(m => m.id !== assistantMsgId));

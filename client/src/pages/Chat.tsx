@@ -35,6 +35,7 @@ export default function Chat() {
   const [uploading, setUploading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
+  const [webSearch, setWebSearch] = useState(false);
 
   const { isSpeaking, speak, stop: stopSpeak } = useTTS();
 
@@ -73,7 +74,7 @@ export default function Chat() {
     setInput('');
     setClarification(null);
     setChatTitle(msg.slice(0, 50));
-    await sendMessage(msg);
+    await sendMessage(msg, webSearch);
   };
 
   const handleRegenerate = async () => {
@@ -180,6 +181,9 @@ export default function Chat() {
 
               return (
                 <div key={m.id}>
+                  {m.citations && m.citations.length > 0 && (
+                    <CitationsCard citations={m.citations} />
+                  )}
                   <MessageBubble
                     role={m.role}
                     content={m.content}
@@ -193,9 +197,6 @@ export default function Chat() {
                     onSpeak={() => speak(m.content)}
                     onStopSpeak={stopSpeak}
                   />
-                  {m.citations && m.citations.length > 0 && (
-                    <CitationsCard citations={m.citations} />
-                  )}
                   {m.relatedQuestions && m.relatedQuestions.length > 0 && (
                     <RelatedQuestions questions={m.relatedQuestions} onQuestionClick={handleSend} />
                   )}
@@ -224,6 +225,8 @@ export default function Chat() {
             loading={loading}
             uploading={uploading}
             placeholder={t('chat.placeholder')}
+            webSearch={webSearch}
+            onToggleSearch={() => setWebSearch(s => !s)}
           />
         </div>
       </div>

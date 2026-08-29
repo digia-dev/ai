@@ -1568,7 +1568,7 @@ ATURAN:
 
 app.post('/api/chat/stream', auth, rateLimit(30, 60000), async (req, res) => {
   try {
-    const { conversationId, message, focusMode, regenerate } = req.body;
+    const { conversationId, message, focusMode, regenerate, webSearch } = req.body;
 
     let convId = conversationId;
     let actualMessage = message;
@@ -1612,10 +1612,15 @@ app.post('/api/chat/stream', auth, rateLimit(30, 60000), async (req, res) => {
       [req.user.id]
     );
 
-    // Web search
-    const searchResult = await tavilySearch(actualMessage, focusMode);
-    const searchContext = buildSearchContext(searchResult);
-    const citations = extractCitations(searchResult);
+    // Web search — only when user opts in
+    let searchResult = null;
+    let searchContext = '';
+    let citations = [];
+    if (webSearch) {
+      searchResult = await tavilySearch(actualMessage, focusMode || 'general');
+      searchContext = buildSearchContext(searchResult);
+      citations = extractCitations(searchResult);
+    }
 
     const systemPrompt = `Kamu adalah Tara, asisten AI yang membantu pengguna Giantara ecosystem.
 
@@ -1726,12 +1731,33 @@ ATURAN:
     );
     await pool.query('UPDATE "Conversation" SET "updatedAt" = NOW() WHERE id = $1', [convId]);
 
+    // Token billing for regular chat
+    const tokensUsed = Math.ceil(fullContent.length / 4) + (webSearch ? 50 : 0);
+    if (tokensUsed > 0) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
+        const newBalance = Math.max(0, (bal.rows[0]?.tokenBalance || 0) - tokensUsed);
+        await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
+        await client.query(
+          'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+          [req.user.id, 'usage', tokensUsed, newBalance, webSearch ? 'Chat + web search' : 'Chat']
+        );
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+      } finally {
+        client.release();
+      }
+    }
+
     const relatedQuestions = await generateRelatedQuestions(actualMessage, fullContent, searchResult);
 
     // Extract memories in background
     extractMemories(req.user.id, actualMessage, fullContent, convId).catch(() => {});
 
-    res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files, citations, relatedQuestions })}\n\n`);
+    res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files, citations, relatedQuestions, tokensUsed })}\n\n`);
     res.end();
   } catch (err) {
     try {
