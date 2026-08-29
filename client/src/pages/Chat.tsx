@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
+import { useArtifacts } from '../hooks/useArtifacts';
 import MessageBubble from '../components/MessageBubble';
 import StreamingBubble from '../components/StreamingBubble';
 import ClarificationCard from '../components/ClarificationCard';
@@ -8,9 +9,10 @@ import CitationsCard from '../components/CitationsCard';
 import RelatedQuestions from '../components/RelatedQuestions';
 import FocusModeSelector from '../components/FocusModeSelector';
 import ChatInput from '../components/ChatInput';
+import ArtifactPanel from '../components/ArtifactPanel';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
-import { Sparkles, Square } from 'lucide-react';
+import { Sparkles, Square, Code } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
 interface Clarification {
@@ -29,6 +31,9 @@ export default function Chat() {
   const [uploading, setUploading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
+  const [showArtifactPanel, setShowArtifactPanel] = useState(false);
+
+  const { artifacts, activeArtifactId, selectArtifact, closeArtifact } = useArtifacts(messages);
 
   const { isRecording, toggle: toggleVoice } = useVoice({
     onResult: (transcript) => setInput(prev => prev + transcript),
@@ -41,6 +46,12 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
+
+  useEffect(() => {
+    if (artifacts.length > 0 && !showArtifactPanel) {
+      setShowArtifactPanel(true);
+    }
+  }, [artifacts.length]);
 
   const handleSend = async (text?: string) => {
     const msg = text || input.trim();
@@ -62,6 +73,10 @@ export default function Chat() {
     setEditingMsgId(null);
     setChatTitle('Edit & regenerate...');
     await editMessage(currentConvId, msgId, newContent);
+  };
+
+  const handleArtifactClick = () => {
+    setShowArtifactPanel(true);
   };
 
   const handleUpload = async (files: FileList) => {
@@ -92,6 +107,17 @@ export default function Chat() {
         <span className="text-sm font-semibold dark:text-white">{chatTitle}</span>
         <div className="flex items-center gap-2">
           <FocusModeSelector value={focusMode} onChange={setFocusMode} />
+          {artifacts.length > 0 && (
+            <button
+              onClick={() => setShowArtifactPanel(!showArtifactPanel)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                showArtifactPanel ? 'bg-black dark:bg-white text-white dark:text-black' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Code className="w-3 h-3" />
+              Artifacts ({artifacts.length})
+            </button>
+          )}
           {isStreaming && (
             <button
               onClick={stopGeneration}
@@ -104,83 +130,97 @@ export default function Chat() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-5">
-        {messages.length === 0 && !clarification && (
-          <div className="text-center py-20 max-w-md mx-auto">
-            <Sparkles className="w-10 h-10 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-            <h2 className="text-xl font-bold mb-2 dark:text-white">Halo, saya Tara</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Asisten AI untuk ekosistem Giantara. Tanya apa saja, atau unggah sumber untuk dianalisis.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {suggestions.map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSend(s)}
-                  className="text-left p-3 border border-gray-200 dark:border-gray-600 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors dark:text-gray-300"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-5 py-5">
+            {messages.length === 0 && !clarification && (
+              <div className="text-center py-20 max-w-md mx-auto">
+                <Sparkles className="w-10 h-10 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+                <h2 className="text-xl font-bold mb-2 dark:text-white">Halo, saya Tara</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Asisten AI untuk ekosistem Giantara. Tanya apa saja, atau unggah sumber untuk dianalisis.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleSend(s)}
+                      className="text-left p-3 border border-gray-200 dark:border-gray-600 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors dark:text-gray-300"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-        {messages.map((m, idx) => {
-          if (m.role === 'assistant' && isStreaming && m.content === '' && streamingContent) {
-            return <StreamingBubble key={m.id} content={streamingContent} />;
-          }
-          if (m.role === 'assistant' && isStreaming && m.id === messages[messages.length - 1]?.id && streamingContent) {
-            return <StreamingBubble key={m.id} content={streamingContent} />;
-          }
+            {messages.map((m, idx) => {
+              if (m.role === 'assistant' && isStreaming && m.content === '' && streamingContent) {
+                return <StreamingBubble key={m.id} content={streamingContent} />;
+              }
+              if (m.role === 'assistant' && isStreaming && m.id === messages[messages.length - 1]?.id && streamingContent) {
+                return <StreamingBubble key={m.id} content={streamingContent} />;
+              }
 
-          const isLastAssistant = m.role === 'assistant' && idx === messages.length - 1;
-          const isUserMsg = m.role === 'user';
+              const isLastAssistant = m.role === 'assistant' && idx === messages.length - 1;
+              const isUserMsg = m.role === 'user';
 
-          return (
-            <div key={m.id}>
-              <MessageBubble
-                role={m.role}
-                content={m.content}
-                createdAt={m.createdAt}
-                isLast={isLastAssistant}
-                onRegenerate={isLastAssistant ? handleRegenerate : undefined}
-                onEdit={isUserMsg ? (newContent) => handleEdit(m.id, newContent) : undefined}
-                isEditing={editingMsgId === m.id}
-                onCancelEdit={() => setEditingMsgId(null)}
+              return (
+                <div key={m.id}>
+                  <MessageBubble
+                    role={m.role}
+                    content={m.content}
+                    createdAt={m.createdAt}
+                    isLast={isLastAssistant}
+                    onRegenerate={isLastAssistant ? handleRegenerate : undefined}
+                    onEdit={isUserMsg ? (newContent) => handleEdit(m.id, newContent) : undefined}
+                    isEditing={editingMsgId === m.id}
+                    onCancelEdit={() => setEditingMsgId(null)}
+                    onArtifactClick={handleArtifactClick}
+                  />
+                  {m.citations && m.citations.length > 0 && (
+                    <CitationsCard citations={m.citations} />
+                  )}
+                  {m.relatedQuestions && m.relatedQuestions.length > 0 && (
+                    <RelatedQuestions questions={m.relatedQuestions} onQuestionClick={handleSend} />
+                  )}
+                </div>
+              );
+            })}
+
+            {clarification && (
+              <ClarificationCard
+                question={clarification.question}
+                options={clarification.options}
+                onSelect={(label) => handleSend(label)}
               />
-              {m.citations && m.citations.length > 0 && (
-                <CitationsCard citations={m.citations} />
-              )}
-              {m.relatedQuestions && m.relatedQuestions.length > 0 && (
-                <RelatedQuestions questions={m.relatedQuestions} onQuestionClick={handleSend} />
-              )}
-            </div>
-          );
-        })}
+            )}
 
-        {clarification && (
-          <ClarificationCard
-            question={clarification.question}
-            options={clarification.options}
-            onSelect={(label) => handleSend(label)}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <ChatInput
+            input={input}
+            setInput={setInput}
+            onSend={handleSend}
+            onUpload={handleUpload}
+            onVoice={toggleVoice}
+            isRecording={isRecording}
+            loading={loading}
+            uploading={uploading}
+            placeholder="Tanya apa saja ke Tara..."
+          />
+        </div>
+
+        {showArtifactPanel && (
+          <ArtifactPanel
+            artifacts={artifacts}
+            activeArtifactId={activeArtifactId}
+            onSelectArtifact={selectArtifact}
+            onClose={() => { setShowArtifactPanel(false); closeArtifact(); }}
           />
         )}
-
-        <div ref={messagesEndRef} />
       </div>
-
-      <ChatInput
-        input={input}
-        setInput={setInput}
-        onSend={handleSend}
-        onUpload={handleUpload}
-        onVoice={toggleVoice}
-        isRecording={isRecording}
-        loading={loading}
-        uploading={uploading}
-        placeholder="Tanya apa saja ke Tara..."
-      />
     </>
   );
 }

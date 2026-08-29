@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
-import { Copy, Check, RotateCw, Pencil } from 'lucide-react';
+import { Copy, Check, RotateCw, Pencil, ExternalLink } from 'lucide-react';
 
 interface MessageBubbleProps {
   role: string;
@@ -12,32 +12,52 @@ interface MessageBubbleProps {
   onEdit?: (newContent: string) => void;
   isEditing?: boolean;
   onCancelEdit?: () => void;
+  onArtifactClick?: (language: string, content: string, title?: string) => void;
 }
 
-function CodeBlock({ children, className, ...props }: any) {
+function CodeBlock({ children, className, onArtifactClick, ...props }: any) {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
+  const codeContent = String(children).trim();
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(String(children));
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(codeContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleClick = () => {
+    if (onArtifactClick && codeContent.length > 50) {
+      onArtifactClick(language, codeContent);
+    }
+  };
+
   if (className) {
     return (
-      <div className="relative group">
+      <div className="relative group cursor-pointer" onClick={handleClick}>
         {language && (
           <span className="absolute top-2 left-3 text-[10px] text-gray-400 font-mono">{language}</span>
         )}
-        <button
-          onClick={handleCopy}
-          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-black transition-opacity p-1 rounded"
-          title="Salin kode"
-        >
-          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-        </button>
+        <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {codeContent.length > 50 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onArtifactClick?.(language, codeContent); }}
+              className="text-gray-400 hover:text-white p-1 rounded bg-gray-700/50"
+              title="Buka di panel"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          )}
+          <button
+            onClick={handleCopy}
+            className="text-gray-400 hover:text-white p-1 rounded bg-gray-700/50"
+            title="Salin kode"
+          >
+            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          </button>
+        </div>
         <pre className={className} {...props}>
           {children}
         </pre>
@@ -61,6 +81,7 @@ export default function MessageBubble({
   onEdit,
   isEditing = false,
   onCancelEdit,
+  onArtifactClick,
 }: MessageBubbleProps) {
   const isUser = role === 'user';
   const [copied, setCopied] = useState(false);
@@ -125,7 +146,7 @@ export default function MessageBubble({
               rehypePlugins={[rehypeHighlight]}
               components={{
                 pre: ({ children, ...props }) => (
-                  <CodeBlock {...props}>{children}</CodeBlock>
+                  <CodeBlock {...props} onArtifactClick={onArtifactClick}>{children}</CodeBlock>
                 ),
               }}
             >
