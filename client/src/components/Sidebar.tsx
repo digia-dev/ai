@@ -6,6 +6,7 @@ import ThemeToggle from './ThemeToggle';
 import Logo from './Logo';
 import { getAgentIcon } from '../lib/agentIcons';
 import { isAuthenticated } from '../lib/auth';
+import { useAuth } from './AuthContext';
 import {
   Plus,
   MessageSquare,
@@ -57,6 +58,7 @@ export default function Sidebar({
   onLogout,
 }: SidebarProps) {
   const navigate = useNavigate();
+  const { openAuthModal } = useAuth();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -261,13 +263,13 @@ export default function Sidebar({
         {!isAuthenticated() && (
           <div className="pt-2 border-t border-gray-200 dark:border-gray-700 mt-2 space-y-1">
             <div
-              onClick={() => navigate('/login')}
+              onClick={() => openAuthModal('login')}
               className="flex items-center justify-center gap-2 px-3 py-2 text-sm cursor-pointer rounded-lg bg-black text-white hover:bg-gray-800 transition-colors"
             >
               <span>Masuk</span>
             </div>
             <div
-              onClick={() => navigate('/register')}
+              onClick={() => openAuthModal('register')}
               className="flex items-center justify-center gap-2 px-3 py-2 text-sm cursor-pointer rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               <span>Daftar</span>

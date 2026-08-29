@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { setToken } from '../lib/auth';
 import { apiFetch } from '../lib/api';
-import { Eye, EyeOff } from 'lucide-react';
-import Logo from '../components/Logo';
+import { Eye, EyeOff, X } from 'lucide-react';
+import Logo from './Logo';
+import Modal from './Modal';
+import { useAuth } from './AuthContext';
 
-export default function Auth() {
-  const navigate = useNavigate();
+export default function AuthModal() {
+  const { authModalOpen, closeAuthModal } = useAuth();
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -33,7 +34,7 @@ export default function Auth() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setToken(data.token);
-      navigate('/chat');
+      closeAuthModal();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -42,14 +43,16 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-5 bg-white dark:bg-gray-900">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <Logo className="w-10 h-10 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold dark:text-white">{isRegister ? 'Buat Akun' : 'Tara AI'}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {isRegister ? 'Gabung dengan ekosistem Giantara' : 'Asisten AI bertenaga Giantara'}
-          </p>
+    <Modal open={authModalOpen} onClose={closeAuthModal} maxWidth="max-w-sm">
+      <div className="p-5">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Logo className="w-6 h-6" />
+            <span className="font-bold text-sm">{isRegister ? 'Daftar' : 'Masuk'}</span>
+          </div>
+          <button onClick={closeAuthModal} className="text-gray-400 hover:text-black dark:hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         {error && (
@@ -97,13 +100,7 @@ export default function Auth() {
             {isRegister ? 'Masuk' : 'Daftar'}
           </button>
         </p>
-
-        {!isRegister && (
-          <p className="text-center text-xs text-gray-400 mt-3">
-            <button className="hover:underline hover:text-black dark:hover:text-white">Lupa password?</button>
-          </p>
-        )}
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import Auth from './pages/Auth';
 import Chat from './pages/Chat';
 import Sources from './pages/Sources';
 import AgentChat from './pages/AgentChat';
@@ -15,6 +14,8 @@ import AppLayout from './components/AppLayout';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastContainer } from './components/Toast';
 import { getCurrentUser } from './lib/auth';
+import { AuthProvider } from './components/AuthContext';
+import AuthModal from './components/AuthModal';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
@@ -28,31 +29,32 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">Memuat...</div>;
-  if (!authed) return <Navigate to="/login" replace />;
+  if (!authed) return <Navigate to="/chat" replace />;
   return <AppLayout>{children}</AppLayout>;
 }
 
 export default function App() {
   return (
     <BrowserRouter>
-      <ToastContainer />
-      <ErrorBoundary>
-        <Routes>
-          <Route path="/login" element={<Auth />} />
-          <Route path="/register" element={<Auth />} />
-          <Route path="/shared/:token" element={<SharedResult />} />
-          <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
-          <Route path="/sources" element={<ProtectedRoute><Sources /></ProtectedRoute>} />
-          <Route path="/agents" element={<ProtectedRoute><AgentManager /></ProtectedRoute>} />
-          <Route path="/agents/:agentId" element={<ProtectedRoute><AgentChat /></ProtectedRoute>} />
-          <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
-          <Route path="/account/billing" element={<ProtectedRoute><AccountBilling /></ProtectedRoute>} />
-          <Route path="/account/history" element={<ProtectedRoute><AccountHistory /></ProtectedRoute>} />
-          <Route path="/collection" element={<ProtectedRoute><Collection /></ProtectedRoute>} />
-          <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-          <Route path="*" element={<Navigate to="/chat" replace />} />
-        </Routes>
-      </ErrorBoundary>
+      <AuthProvider>
+        <ToastContainer />
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/shared/:token" element={<SharedResult />} />
+            <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
+            <Route path="/sources" element={<ProtectedRoute><Sources /></ProtectedRoute>} />
+            <Route path="/agents" element={<ProtectedRoute><AgentManager /></ProtectedRoute>} />
+            <Route path="/agents/:agentId" element={<ProtectedRoute><AgentChat /></ProtectedRoute>} />
+            <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+            <Route path="/account/billing" element={<ProtectedRoute><AccountBilling /></ProtectedRoute>} />
+            <Route path="/account/history" element={<ProtectedRoute><AccountHistory /></ProtectedRoute>} />
+            <Route path="/collection" element={<ProtectedRoute><Collection /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to="/chat" replace />} />
+          </Routes>
+        </ErrorBoundary>
+        <AuthModal />
+      </AuthProvider>
     </BrowserRouter>
   );
 }
