@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -13,10 +13,12 @@ import ClarificationCard from '../components/ClarificationCard';
 import CitationsCard from '../components/CitationsCard';
 import RelatedQuestions from '../components/RelatedQuestions';
 import SummaryCard from '../components/SummaryCard';
+import Modal from '../components/Modal';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
 import { Sparkles } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import { isAuthenticated } from '../lib/auth';
 
 interface Clarification {
   question: string;
@@ -24,6 +26,7 @@ interface Clarification {
 }
 
 export default function Chat() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const {
     messages, loading, streamingContent, isStreaming, messagesEndRef,
@@ -39,6 +42,7 @@ export default function Chat() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
   const [webSearch, setWebSearch] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const { isSpeaking, speak, stop: stopSpeak } = useTTS();
 
@@ -116,7 +120,15 @@ export default function Chat() {
     }
   };
 
+  const handleVoiceClick = () => {
+    if (!isAuthenticated()) { setShowAuthModal(true); return; }
+    toggleVoice();
+  };
+
   const handleUpload = async (files: FileList) => {
+    if (!isAuthenticated()) { setShowAuthModal(true); return; }
+    setUploading(true);
+    if (!isAuthenticated()) { setShowAuthModal(true); return; }
     setUploading(true);
     let successCount = 0;
     for (const file of Array.from(files)) {
@@ -233,12 +245,31 @@ export default function Chat() {
         setInput={setInput}
         onSend={handleSend}
         onUpload={handleUpload}
-        onVoice={toggleVoice}
+        onVoice={handleVoiceClick}
         isRecording={isRecording}
         loading={loading}
         uploading={uploading}
         placeholder={t('chat.placeholder')}
       />
+
+      {/* Auth Modal */}
+      <Modal open={showAuthModal} onClose={() => setShowAuthModal(false)} maxWidth="max-w-sm">
+        <div className="p-6 text-center">
+          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Sparkles className="w-6 h-6 text-gray-500" />
+          </div>
+          <h3 className="font-semibold text-sm mb-2">Masuk untuk mengunggah file</h3>
+          <p className="text-xs text-gray-500 mb-5">Buat akun atau masuk untuk menggunakan fitur upload file dan input suara.</p>
+          <div className="flex gap-2 justify-center">
+            <button onClick={() => { setShowAuthModal(false); navigate('/login'); }} className="px-4 py-2 bg-black text-white rounded-lg text-xs font-medium hover:bg-gray-800">
+              Masuk
+            </button>
+            <button onClick={() => { setShowAuthModal(false); navigate('/register'); }} className="px-4 py-2 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">
+              Daftar
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

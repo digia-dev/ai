@@ -10,8 +10,9 @@ import CitationsCard from '../components/CitationsCard';
 import RelatedQuestions from '../components/RelatedQuestions';
 import SummaryCard from '../components/SummaryCard';
 import ChatInput from '../components/ChatInput';
+import Modal from '../components/Modal';
 import { SkeletonChat } from '../components/Skeleton';
-import { ArrowLeft, Square } from 'lucide-react';
+import { ArrowLeft, Square, Sparkles } from 'lucide-react';
 import { getAgentIcon } from '../lib/agentIcons';
 import { isAuthenticated } from '../lib/auth';
 
@@ -39,6 +40,7 @@ export default function AgentChat() {
 
   const [input, setInput] = useState('');
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const { isSpeaking, speak, stop: stopSpeak } = useTTS();
   const { isRecording, toggle: toggleVoice } = useVoice({
@@ -91,7 +93,11 @@ export default function AgentChat() {
     await editMessage(currentConvId, msgId, newContent);
   };
 
-  const authenticated = isAuthenticated();
+  const handleVoiceClick = () => {
+    if (!isAuthenticated()) { setShowAuthModal(true); return; }
+    toggleVoice();
+  };
+
   const modelName = agent?.model.split('/').pop() || agent?.model;
 
   if (initialLoading) return <SkeletonChat />;
@@ -135,11 +141,9 @@ export default function AgentChat() {
                   input={input}
                   setInput={setInput}
                   onSend={handleSend}
-                  onVoice={toggleVoice}
+                  onVoice={handleVoiceClick}
                   isRecording={isRecording}
                   loading={loading}
-                  showUpload={authenticated}
-                  showVoice={authenticated}
                   placeholder={`Tanya ${agent.name}...`}
                 />
               </div>
@@ -196,14 +200,31 @@ export default function AgentChat() {
           input={input}
           setInput={setInput}
           onSend={handleSend}
-          onVoice={toggleVoice}
+          onVoice={handleVoiceClick}
           isRecording={isRecording}
           loading={loading}
-          showUpload={authenticated}
-          showVoice={authenticated}
           placeholder={`Tanya ${agent.name}...`}
         />
       )}
+
+      {/* Auth Modal */}
+      <Modal open={showAuthModal} onClose={() => setShowAuthModal(false)} maxWidth="max-w-sm">
+        <div className="p-6 text-center">
+          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Sparkles className="w-6 h-6 text-gray-500" />
+          </div>
+          <h3 className="font-semibold text-sm mb-2">Masuk untuk menggunakan fitur ini</h3>
+          <p className="text-xs text-gray-500 mb-5">Buat akun atau masuk untuk menggunakan upload file dan input suara.</p>
+          <div className="flex gap-2 justify-center">
+            <button onClick={() => { setShowAuthModal(false); navigate('/login'); }} className="px-4 py-2 bg-black text-white rounded-lg text-xs font-medium hover:bg-gray-800">
+              Masuk
+            </button>
+            <button onClick={() => { setShowAuthModal(false); navigate('/register'); }} className="px-4 py-2 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">
+              Daftar
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

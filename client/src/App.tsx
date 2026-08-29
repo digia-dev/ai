@@ -41,7 +41,7 @@ export default function App() {
           <Route path="/login" element={<Auth />} />
           <Route path="/register" element={<Auth />} />
           <Route path="/shared/:token" element={<SharedResult />} />
-          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+          <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
           <Route path="/sources" element={<ProtectedRoute><Sources /></ProtectedRoute>} />
           <Route path="/agents" element={<ProtectedRoute><AgentManager /></ProtectedRoute>} />
           <Route path="/agents/:agentId" element={<ProtectedRoute><AgentChat /></ProtectedRoute>} />

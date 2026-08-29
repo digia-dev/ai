@@ -192,6 +192,15 @@ function auth(req, res, next) {
   }
 }
 
+function optionalAuth(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) { req.user = null; return next(); }
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+  } catch { req.user = null; }
+  next();
+}
+
 function adminAuth(req, res, next) {
   auth(req, res, async () => {
     try {
@@ -1573,14 +1582,15 @@ ATURAN:
 
 // ============ CHAT STREAMING (SSE) ============
 
-app.post('/api/chat/stream', auth, rateLimit(30, 60000), async (req, res) => {
+app.post('/api/chat/stream', optionalAuth, rateLimit(30, 60000), async (req, res) => {
+  const isGuest = !req.user;
   try {
     const { conversationId, message, focusMode, regenerate, webSearch } = req.body;
 
     let convId = conversationId;
     let actualMessage = message;
 
-    if (regenerate && convId) {
+    if (regenerate && convId && !isGuest) {
       const lastAssistant = await pool.query(
         'SELECT id FROM "Message" WHERE "conversationId" = $1 AND role = $2 ORDER BY "createdAt" DESC LIMIT 1',
         [convId, 'assistant']
@@ -1600,29 +1610,37 @@ app.post('/api/chat/stream', auth, rateLimit(30, 60000), async (req, res) => {
     if (!actualMessage) return res.status(400).json({ error: 'Message required' });
 
     if (!convId) {
-      const result = await pool.query(
-        'INSERT INTO "Conversation" ("userId", title) VALUES ($1, $2) RETURNING id',
-        [req.user.id, actualMessage.slice(0, 50)]
-      );
-      convId = result.rows[0].id;
+      if (!isGuest) {
+        const result = await pool.query(
+          'INSERT INTO "Conversation" ("userId", title) VALUES ($1, $2) RETURNING id',
+          [req.user.id, actualMessage.slice(0, 50)]
+        );
+        convId = result.rows[0].id;
+      } else {
+        convId = Date.now();
+      }
     }
 
-    if (!regenerate) {
+    if (!regenerate && !isGuest) {
       await pool.query(
         'INSERT INTO "Message" ("conversationId", role, content) VALUES ($1, $2, $3)',
         [convId, 'user', actualMessage]
       );
     }
 
-    const sources = await pool.query(
-      'SELECT name, content FROM "Source" WHERE "userId" = $1 LIMIT 5',
-      [req.user.id]
-    );
+    let sourcesResult = { rows: [] };
+    if (!isGuest) {
+      sourcesResult = await pool.query(
+        'SELECT name, content FROM "Source" WHERE "userId" = $1 LIMIT 5',
+        [req.user.id]
+      );
+    }
 
-    // Web search — only when user opts in
+    // Web search
     let searchResult = null;
     let searchContext = '';
     let citations = [];
+
     if (webSearch) {
       searchResult = await tavilySearch(actualMessage, focusMode || 'general');
       searchContext = buildSearchContext(searchResult);
@@ -1649,26 +1667,31 @@ ATURAN:
 
     const contextMessages = [{ role: 'system', content: systemPrompt }];
 
-    // Inject user memory
-    const userMemory = await getUserMemory(req.user.id);
-    if (userMemory) {
-      contextMessages.push({ role: 'system', content: userMemory });
+    // Inject user memory (only for logged in users)
+    if (!isGuest) {
+      const userMemory = await getUserMemory(req.user.id);
+      if (userMemory) {
+        contextMessages.push({ role: 'system', content: userMemory });
+      }
     }
 
     if (searchContext) {
       contextMessages.push({ role: 'system', content: `Hasil pencarian web:\n${searchContext}` });
     }
 
-    if (sources.rows.length > 0) {
-      const sourceContext = sources.rows.map(s => `[${s.name}]: ${s.content?.slice(0, 2000) || ''}`).join('\n\n');
+    if (sourcesResult.rows.length > 0) {
+      const sourceContext = sourcesResult.rows.map(s => `[${s.name}]: ${s.content?.slice(0, 2000) || ''}`).join('\n\n');
       contextMessages.push({ role: 'system', content: `Dokumen yang tersedia:\n${sourceContext}` });
     }
 
-    const history = await pool.query(
-      'SELECT role, content FROM "Message" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC LIMIT 20',
-      [convId]
-    );
-    contextMessages.push(...history.rows.map(m => ({ role: m.role, content: m.content })));
+    // Load history (only for logged in users)
+    if (!isGuest) {
+      const history = await pool.query(
+        'SELECT role, content FROM "Message" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC LIMIT 20',
+        [convId]
+      );
+      contextMessages.push(...history.rows.map(m => ({ role: m.role, content: m.content })));
+    }
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -1730,41 +1753,48 @@ ATURAN:
       }
     }
 
-    const files = await extractAndSaveFiles(fullContent, req.user.id, null, convId);
+    let files = [];
+    let tokensUsed = 0;
 
-    await pool.query(
-      'INSERT INTO "Message" ("conversationId", role, content, citations) VALUES ($1, $2, $3, $4)',
-      [convId, 'assistant', fullContent, JSON.stringify(citations)]
-    );
-    await pool.query('UPDATE "Conversation" SET "updatedAt" = NOW() WHERE id = $1', [convId]);
+    if (!isGuest) {
+      files = await extractAndSaveFiles(fullContent, req.user.id, null, convId);
 
-    // Token billing for regular chat
-    const tokensUsed = Math.ceil(fullContent.length / 4) + (webSearch ? 50 : 0);
-    if (tokensUsed > 0) {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
-        const newBalance = Math.max(0, (bal.rows[0]?.tokenBalance || 0) - tokensUsed);
-        await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
-        await client.query(
-          'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
-          [req.user.id, 'usage', tokensUsed, newBalance, webSearch ? 'Chat + web search' : 'Chat']
-        );
-        await client.query('COMMIT');
-      } catch (e) {
-        await client.query('ROLLBACK');
-      } finally {
-        client.release();
+      await pool.query(
+        'INSERT INTO "Message" ("conversationId", role, content, citations) VALUES ($1, $2, $3, $4)',
+        [convId, 'assistant', fullContent, JSON.stringify(citations)]
+      );
+      await pool.query('UPDATE "Conversation" SET "updatedAt" = NOW() WHERE id = $1', [convId]);
+
+      // Token billing for regular chat
+      tokensUsed = Math.ceil(fullContent.length / 4) + (webSearch ? 50 : 0);
+      if (tokensUsed > 0) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const bal = await client.query('SELECT "tokenBalance" FROM "UserBilling" WHERE "userId" = $1 FOR UPDATE', [req.user.id]);
+          const newBalance = Math.max(0, (bal.rows[0]?.tokenBalance || 0) - tokensUsed);
+          await client.query('UPDATE "UserBilling" SET "tokenBalance" = $1, "updatedAt" = NOW() WHERE "userId" = $2', [newBalance, req.user.id]);
+          await client.query(
+            'INSERT INTO "TokenLedger" ("userId", type, amount, balance, description) VALUES ($1, $2, $3, $4, $5)',
+            [req.user.id, 'usage', tokensUsed, newBalance, webSearch ? 'Chat + web search' : 'Chat']
+          );
+          await client.query('COMMIT');
+        } catch (e) {
+          await client.query('ROLLBACK');
+        } finally {
+          client.release();
+        }
       }
+
+      const relatedQuestions = await generateRelatedQuestions(actualMessage, fullContent, searchResult);
+
+      // Extract memories in background
+      extractMemories(req.user.id, actualMessage, fullContent, convId).catch(() => {});
+
+      res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files, citations, relatedQuestions, tokensUsed })}\n\n`);
+    } else {
+      res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, citations, tokensUsed: 0 })}\n\n`);
     }
-
-    const relatedQuestions = await generateRelatedQuestions(actualMessage, fullContent, searchResult);
-
-    // Extract memories in background
-    extractMemories(req.user.id, actualMessage, fullContent, convId).catch(() => {});
-
-    res.write(`event: done\ndata: ${JSON.stringify({ conversationId: convId, content: fullContent, files, citations, relatedQuestions, tokensUsed })}\n\n`);
     res.end();
   } catch (err) {
     try {
