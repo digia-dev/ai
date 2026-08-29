@@ -1979,13 +1979,18 @@ app.delete('/api/sources/:id', auth, async (req, res) => {
 app.get('/api/agents', auth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT DISTINCT ON (a.name, a."isDefault") a.id, a.name, a.icon, a.model, a.temperature, a."maxTokens", a."isDefault", a."isTemplate", a."systemPrompt",
-       COALESCE(json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color)) FILTER (WHERE t.id IS NOT NULL), '[]') as tags
-       FROM "Agent" a
-       LEFT JOIN "AgentTag" at2 ON a.id = at2."agentId"
-       LEFT JOIN "Tag" t ON at2."tagId" = t.id
-       WHERE (a."userId" = $1 OR a."isDefault" = TRUE) AND a."isActive" = TRUE
-       GROUP BY a.id, a.name, a."isDefault" ORDER BY a.name ASC, a."isDefault" DESC, a.id ASC`,
+      `WITH deduped AS (
+        SELECT DISTINCT ON (a.name, a."isDefault") a.id, a.name, a.icon, a.model, a.temperature, a."maxTokens", a."isDefault", a."isTemplate", a."systemPrompt"
+        FROM "Agent" a
+        WHERE (a."userId" = $1 OR a."isDefault" = TRUE) AND a."isActive" = TRUE
+        ORDER BY a.name ASC, a."isDefault" DESC, a.id ASC
+      )
+      SELECT d.*, COALESCE(json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color)) FILTER (WHERE t.id IS NOT NULL), '[]') as tags
+      FROM deduped d
+      LEFT JOIN "AgentTag" at2 ON d.id = at2."agentId"
+      LEFT JOIN "Tag" t ON at2."tagId" = t.id
+      GROUP BY d.id, d.name, d.icon, d.model, d.temperature, d."maxTokens", d."isDefault", d."isTemplate", d."systemPrompt"
+      ORDER BY d.name ASC`,
       [req.user.id]
     );
     res.json(result.rows);
