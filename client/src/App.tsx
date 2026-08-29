@@ -10,6 +10,7 @@ import AccountBilling from './pages/AccountBilling';
 import AccountHistory from './pages/AccountHistory';
 import Collection from './pages/Collection';
 import SharedResult from './pages/SharedResult';
+import AdminDashboard from './pages/AdminDashboard';
 import AppLayout from './components/AppLayout';
 import { ToastContainer } from './components/Toast';
 import { getCurrentUser } from './lib/auth';
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/account/billing" element={<ProtectedRoute><AccountBilling /></ProtectedRoute>} />
         <Route path="/account/history" element={<ProtectedRoute><AccountHistory /></ProtectedRoute>} />
         <Route path="/collection" element={<ProtectedRoute><Collection /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/chat" replace />} />
       </Routes>
     </BrowserRouter>

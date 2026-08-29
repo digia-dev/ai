@@ -19,6 +19,7 @@ import {
   ChevronDown,
   ChevronRight,
   Search,
+  Shield,
 } from 'lucide-react';
 
 interface Conversation {
@@ -56,6 +57,7 @@ export default function Sidebar({
   const navigate = useNavigate();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tokenBalance, setTokenBalance] = useState<number>(0);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     agents: true,
     account: false,
@@ -67,6 +69,7 @@ export default function Sidebar({
   useEffect(() => {
     apiFetch('/api/agents').then(r => r.ok ? r.json() : []).then(setAgents).catch(() => {});
     apiFetch('/api/account/billing').then(r => r.ok ? r.json() : null).then(d => { if (d) setTokenBalance(d.tokenBalance); }).catch(() => {});
+    apiFetch('/api/account/profile').then(r => r.ok ? r.json() : null).then(d => { if (d?.isAdmin) setIsAdmin(true); }).catch(() => {});
   }, []);
 
   const handleSearch = useCallback(async (query: string) => {
@@ -253,6 +256,15 @@ export default function Sidebar({
               <LogOut className="w-4 h-4" />
               <span>Keluar</span>
             </div>
+            {isAdmin && (
+              <div
+                onClick={() => navigate('/admin')}
+                className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              >
+                <Shield className="w-4 h-4" />
+                <span>Admin</span>
+              </div>
+            )}
           </div>
         )}
 

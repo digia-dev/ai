@@ -92,6 +92,8 @@ async function runMigrations() {
       "createdAt" TIMESTAMP DEFAULT NOW()
     )`);
     await client.query('ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "branchId" INTEGER DEFAULT 1');
+    await client.query('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isAdmin" BOOLEAN DEFAULT false');
+    await client.query('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "banned" BOOLEAN DEFAULT false');
     console.log('Migrations completed');
   } catch (err) {
     console.error('Migration error:', err.message);
@@ -133,6 +135,103 @@ function auth(req, res, next) {
     res.status(401).json({ error: 'Invalid token' });
   }
 }
+
+function adminAuth(req, res, next) {
+  auth(req, res, async () => {
+    try {
+      const result = await pool.query('SELECT "isAdmin" FROM "User" WHERE id = $1', [req.user.id]);
+      if (!result.rows[0]?.isAdmin) {
+        return res.status(403).json({ error: 'Admin access required' });
+      }
+      next();
+    } catch {
+      res.status(500).json({ error: 'Auth check failed' });
+    }
+  });
+}
+
+// ============ ADMIN APIs ============
+
+app.get('/api/admin/stats', adminAuth, async (req, res) => {
+  try {
+    const [users, conversations, messages, tokens, agents] = await Promise.all([
+      pool.query('SELECT COUNT(*) as count FROM "User"'),
+      pool.query('SELECT COUNT(*) as count FROM "Conversation"'),
+      pool.query('SELECT COUNT(*) as count FROM "Message"'),
+      pool.query('SELECT COALESCE(SUM("tokenBalance"), 0) as total FROM "UserBilling"'),
+      pool.query('SELECT COUNT(*) as count FROM "Agent"'),
+    ]);
+    res.json({
+      users: parseInt(users.rows[0].count),
+      conversations: parseInt(conversations.rows[0].count),
+      messages: parseInt(messages.rows[0].count),
+      totalTokens: parseInt(tokens.rows[0].total),
+      agents: parseInt(agents.rows[0].count),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/users', adminAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.email, u.name, u."createdAt", u."isAdmin", u.banned,
+        COALESCE(b."tokenBalance", 0) as "tokenBalance",
+        (SELECT COUNT(*) FROM "Conversation" WHERE "userId" = u.id) as "conversationCount",
+        (SELECT COUNT(*) FROM "Message" m JOIN "Conversation" c ON m."conversationId" = c.id WHERE c."userId" = u.id) as "messageCount"
+      FROM "User" u
+      LEFT JOIN "UserBilling" b ON b."userId" = u.id
+      ORDER BY u."createdAt" DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/users/:id/ban', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      'UPDATE "User" SET banned = NOT banned WHERE id = $1 RETURNING id, banned',
+      [id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json({ id: result.rows[0].id, banned: result.rows[0].banned });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/users/:id/admin', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      'UPDATE "User" SET "isAdmin" = NOT "isAdmin" WHERE id = $1 RETURNING id, "isAdmin"',
+      [id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json({ id: result.rows[0].id, isAdmin: result.rows[0].isAdmin });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/health', adminAuth, async (req, res) => {
+  try {
+    const dbOk = await pool.query('SELECT 1').then(() => true).catch(() => false);
+    res.json({
+      status: 'ok',
+      database: dbOk ? 'connected' : 'disconnected',
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      nodeVersion: process.version,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ============ MODEL CONFIG ============
 
@@ -2401,7 +2500,7 @@ app.post('/api/payments/callback', async (req, res) => {
 
 app.get('/api/account/profile', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, email, name, "createdAt" FROM "User" WHERE id = $1', [req.user.id]);
+    const result = await pool.query('SELECT id, email, name, "createdAt", "isAdmin" FROM "User" WHERE id = $1', [req.user.id]);
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
