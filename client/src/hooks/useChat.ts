@@ -190,8 +190,24 @@ export function useChat(options: UseChatOptions = {}) {
                     : m
                 ));
               }
-            } catch {}
+            } catch (e) {
+              console.warn('SSE parse error:', e);
+            }
           }
+        }
+      }
+
+      if (buffer.trim()) {
+        const trimmed = buffer.trim();
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const parsed = JSON.parse(trimmed.slice(6));
+            if (parsed.chunk) accumulated += parsed.chunk;
+            if (parsed.conversationId) {
+              finalCitations = parsed.citations || [];
+              finalRelatedQuestions = parsed.relatedQuestions || [];
+            }
+          } catch {}
         }
       }
 
@@ -303,8 +319,24 @@ export function useChat(options: UseChatOptions = {}) {
                       : m
                   ));
                 }
-              } catch {}
+              } catch (e) {
+                console.warn('SSE parse error:', e);
+              }
             }
+          }
+        }
+
+        if (buffer.trim()) {
+          const trimmed = buffer.trim();
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const parsed = JSON.parse(trimmed.slice(6));
+              if (parsed.chunk) accumulated += parsed.chunk;
+              if (parsed.conversationId) {
+                finalCitations = parsed.citations || [];
+                finalRelatedQuestions = parsed.relatedQuestions || [];
+              }
+            } catch {}
           }
         }
 
@@ -405,10 +437,8 @@ export function useChat(options: UseChatOptions = {}) {
           if (trimmed.startsWith('event: error')) {
             const errorLine = lines[lines.indexOf(line) + 1];
             if (errorLine) {
-              try {
-                const errData = JSON.parse(errorLine.replace('data: ', ''));
-                throw new Error(errData.error);
-              } catch {}
+              const errData = JSON.parse(errorLine.replace('data: ', ''));
+              throw new Error(errData.error || 'Server error');
             }
           }
 
@@ -430,8 +460,25 @@ export function useChat(options: UseChatOptions = {}) {
                     : m
                 ));
               }
-            } catch {}
+            } catch (e) {
+              console.warn('SSE parse error:', e);
+            }
           }
+        }
+      }
+
+      if (buffer.trim()) {
+        const trimmed = buffer.trim();
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const parsed = JSON.parse(trimmed.slice(6));
+            if (parsed.chunk) accumulated += parsed.chunk;
+            if (parsed.conversationId) {
+              setCurrentConvId(parsed.conversationId);
+              finalCitations = parsed.citations || [];
+              finalRelatedQuestions = parsed.relatedQuestions || [];
+            }
+          } catch {}
         }
       }
 

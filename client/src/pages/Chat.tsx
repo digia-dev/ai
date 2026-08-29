@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
-import { useArtifacts } from '../hooks/useArtifacts';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useTranslation } from '../hooks/useTranslation';
 import { useTTS } from '../hooks/useTTS';
@@ -10,24 +9,12 @@ import StreamingBubble from '../components/StreamingBubble';
 import ClarificationCard from '../components/ClarificationCard';
 import CitationsCard from '../components/CitationsCard';
 import RelatedQuestions from '../components/RelatedQuestions';
-import FocusModeSelector from '../components/FocusModeSelector';
 import ChatInput from '../components/ChatInput';
-import ArtifactPanel from '../components/ArtifactPanel';
-import ExportMenu from '../components/ExportMenu';
 import BranchSelector from '../components/BranchSelector';
 import SummaryCard from '../components/SummaryCard';
-import PromptTemplates from '../components/PromptTemplates';
-import ImageGenerator from '../components/ImageGenerator';
-import CodeRunner from '../components/CodeRunner';
-import ImageInput from '../components/ImageInput';
-import ModelCompare from '../components/ModelCompare';
-import ConversationComments from '../components/ConversationComments';
-import AnalyticsDashboard from '../components/AnalyticsDashboard';
-import WebhooksManager from '../components/WebhooksManager';
-import LanguageToggle from '../components/LanguageToggle';
 import { SkeletonChat } from '../components/Skeleton';
 import { toast } from '../components/Toast';
-import { Sparkles, Square, Code, Keyboard, BarChart3, Webhook } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
 interface Clarification {
@@ -37,23 +24,18 @@ interface Clarification {
 
 export default function Chat() {
   const {
-    messages, loading, streamingContent, isStreaming, focusMode, setFocusMode, messagesEndRef,
+    messages, loading, streamingContent, isStreaming, messagesEndRef,
     loadConversations, sendMessage, stopGeneration, currentConvId, regenerateMessage, editMessage,
     branches, currentBranchId, loadBranches, switchBranch, createBranch,
   } = useChat();
-  const { locale, toggleLocale, t } = useTranslation();
+  const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [chatTitle, setChatTitle] = useState(t('chat.new'));
   const [uploading, setUploading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
-  const [showArtifactPanel, setShowArtifactPanel] = useState(false);
-  const [showShortcuts, setShowShortcuts] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [showWebhooks, setShowWebhooks] = useState(false);
 
-  const { artifacts, activeArtifactId, selectArtifact, closeArtifact } = useArtifacts(messages);
   const { isSpeaking, speak, stop: stopSpeak } = useTTS();
 
   const { isRecording, toggle: toggleVoice } = useVoice({
@@ -61,7 +43,6 @@ export default function Chat() {
   });
 
   useKeyboardShortcuts({
-    'ctrl+k': () => setShowShortcuts(s => !s),
     'ctrl+n': () => {
       setInput('');
       setChatTitle(t('chat.new'));
@@ -71,7 +52,6 @@ export default function Chat() {
     },
     'escape': () => {
       if (isStreaming) stopGeneration();
-      if (showArtifactPanel) { setShowArtifactPanel(false); closeArtifact(); }
     },
   });
 
@@ -82,12 +62,6 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
-
-  useEffect(() => {
-    if (artifacts.length > 0 && !showArtifactPanel) {
-      setShowArtifactPanel(true);
-    }
-  }, [artifacts.length]);
 
   useEffect(() => {
     if (currentConvId) loadBranches(currentConvId);
@@ -115,10 +89,6 @@ export default function Chat() {
     await editMessage(currentConvId, msgId, newContent);
   };
 
-  const handleArtifactClick = () => {
-    setShowArtifactPanel(true);
-  };
-
   const handleSwitchBranch = async (branchId: number) => {
     if (!currentConvId) return;
     await switchBranch(currentConvId, branchId);
@@ -131,10 +101,6 @@ export default function Chat() {
       await switchBranch(currentConvId, branch.id);
       toast.success(`Branch "${name}" dibuat`);
     }
-  };
-
-  const handleTemplateSelect = (prompt: string) => {
-    setInput(prompt.replace('{input}', ''));
   };
 
   const handleUpload = async (files: FileList) => {
@@ -170,32 +136,6 @@ export default function Chat() {
             onSwitchBranch={handleSwitchBranch}
             onCreateBranch={handleCreateBranch}
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <FocusModeSelector value={focusMode} onChange={setFocusMode} />
-          {artifacts.length > 0 && (
-            <button
-              onClick={() => setShowArtifactPanel(!showArtifactPanel)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                showArtifactPanel ? 'bg-black dark:bg-white text-white dark:text-black' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              <Code className="w-3 h-3" />
-              Artifacts ({artifacts.length})
-            </button>
-          )}
-          {messages.length > 0 && (
-            <ExportMenu messages={messages} title={chatTitle} />
-          )}
-          {isStreaming && (
-            <button
-              onClick={stopGeneration}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <Square className="w-3 h-3" />
-              Hentikan
-            </button>
-          )}
         </div>
       </div>
 
@@ -249,7 +189,6 @@ export default function Chat() {
                     onEdit={isUserMsg ? (newContent) => handleEdit(m.id, newContent) : undefined}
                     isEditing={editingMsgId === m.id}
                     onCancelEdit={() => setEditingMsgId(null)}
-                    onArtifactClick={handleArtifactClick}
                     isSpeaking={isSpeaking}
                     onSpeak={() => speak(m.content)}
                     onStopSpeak={stopSpeak}
@@ -275,42 +214,6 @@ export default function Chat() {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="px-5 py-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 overflow-x-auto flex-1 min-w-0">
-              <PromptTemplates onSelect={handleTemplateSelect} />
-              <ImageGenerator />
-              <CodeRunner />
-              {currentConvId && <ConversationComments conversationId={currentConvId} />}
-              <ImageInput onImageAnalyzed={(desc) => setInput(prev => prev + '\n\n' + desc)} />
-              <ModelCompare />
-              <button
-                onClick={() => setShowAnalytics(true)}
-                className="flex items-center gap-1 px-2 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors shrink-0"
-                title={t('chat.analytics')}
-              >
-                <BarChart3 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setShowWebhooks(true)}
-                className="flex items-center gap-1 px-2 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors shrink-0"
-                title={t('chat.webhooks')}
-              >
-                <Webhook className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setShowShortcuts(true)}
-                className="flex items-center gap-1 px-2 py-1.5 text-xs text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors shrink-0"
-                title={t('chat.shortcuts')}
-              >
-                <Keyboard className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <LanguageToggle locale={locale} onToggle={toggleLocale} />
-              <span className="text-[10px] text-gray-400">Ctrl+K</span>
-            </div>
-          </div>
-
           <ChatInput
             input={input}
             setInput={setInput}
@@ -323,34 +226,7 @@ export default function Chat() {
             placeholder={t('chat.placeholder')}
           />
         </div>
-
-        {showArtifactPanel && (
-          <ArtifactPanel
-            artifacts={artifacts}
-            activeArtifactId={activeArtifactId}
-            onSelectArtifact={selectArtifact}
-            onClose={() => { setShowArtifactPanel(false); closeArtifact(); }}
-          />
-        )}
       </div>
-
-      <AnalyticsDashboard isOpen={showAnalytics} onClose={() => setShowAnalytics(false)} />
-      <WebhooksManager isOpen={showWebhooks} onClose={() => setShowWebhooks(false)} />
-
-      {showShortcuts && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowShortcuts(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold mb-4 dark:text-white">{t('chat.shortcuts')}</h3>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">{t('chat.send')}</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+Enter</kbd></div>
-              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">{t('chat.new')}</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+N</kbd></div>
-              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">{t('chat.stop')}</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Esc</kbd></div>
-              <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-300">{t('chat.shortcuts')}</span><kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">Ctrl+K</kbd></div>
-            </div>
-            <button onClick={() => setShowShortcuts(false)} className="mt-4 w-full py-2 text-xs bg-black dark:bg-white text-white dark:text-black rounded-lg">Tutup</button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
