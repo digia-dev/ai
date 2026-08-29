@@ -1,3 +1,5 @@
+process.on('uncaughtException', (err) => { console.error('UNCAUGHT:', err.stack || err.message); });
+process.on('unhandledRejection', (reason) => { console.error('UNHANDLED REJECTION:', reason?.stack || reason); });
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
@@ -1785,9 +1787,10 @@ app.post('/api/agents/chat/stream', auth, rateLimit(30, 60000), async (req, res)
 
     if (!regenerate) {
       await pool.query(
-      'INSERT INTO "AgentMessage" ("conversationId", role, content) VALUES ($1, $2, $3)',
-      [convId, 'user', actualMessage]
-    );
+        'INSERT INTO "AgentMessage" ("conversationId", role, content) VALUES ($1, $2, $3)',
+        [convId, 'user', actualMessage]
+      );
+    }
 
     const history = await pool.query(
       'SELECT role, content FROM "AgentMessage" WHERE "conversationId" = $1 ORDER BY "createdAt" ASC LIMIT 20',
